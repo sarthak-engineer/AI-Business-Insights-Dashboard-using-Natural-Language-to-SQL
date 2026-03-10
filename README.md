@@ -1,4 +1,4 @@
-# Kannada SQL AI Project 📊
+NLP to SQL AI Project 📊
 
 ## Problem Statement
 Business users and analysts frequently require immediate, ad-hoc data insights to make informed decisions. However, they consistently face a bottleneck in relying on data engineers because they lack the required SQL expertise. This project aims to bridge the gap by allowing users to instantly generate complex SQL queries and visualize the results simply by asking questions in natural English.
