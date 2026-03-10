@@ -1,7 +1,10 @@
+import os
+from dotenv import load_dotenv
 from google import genai
 import time
 
-client = genai.Client(api_key="AIzaSyACexuc68eIcp2TEFYVeGLGAaDaeLAHlVY")
+load_dotenv()
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def generate_sql(question):
 

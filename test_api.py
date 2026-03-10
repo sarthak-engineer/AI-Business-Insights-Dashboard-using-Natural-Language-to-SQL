@@ -1,8 +1,12 @@
 from google import genai
 import sys
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 try:
-    client = genai.Client(api_key='AIzaSyACexuc68eIcp2TEFYVeGLGAaDaeLAHlVY')
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     for m in client.models.list():
         print(m.name)
 except Exception as e:

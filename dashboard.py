@@ -1,12 +1,16 @@
+import os
+from dotenv import load_dotenv
 import streamlit as st
 import pandas as pd
 from supabase import create_client
 from nl_to_sql import generate_sql, generate_insight
 
+load_dotenv()
+
 st.set_page_config(page_title="AI Business Dashboard", layout="wide")
 
-url = "https://qalwstleimbxrjeqyyqh.supabase.co"
-key = "sb_publishable_0RRLIyHLDrXgLP39jqPKyg_Z-6eeX_5"
+url = os.getenv("SUPABASE_URL")
+key = os.getenv("SUPABASE_KEY")
 supabase = create_client(url, key)
 
 st.title("📊 AI Business Insights Dashboard")

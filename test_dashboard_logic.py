@@ -1,9 +1,13 @@
+import os
+from dotenv import load_dotenv
 import pandas as pd
 from supabase import create_client
 from nl_to_sql import generate_sql
 
-url = "https://qalwstleimbxrjeqyyqh.supabase.co"
-key = "sb_publishable_0RRLIyHLDrXgLP39jqPKyg_Z-6eeX_5"
+load_dotenv()
+
+url = os.getenv("SUPABASE_URL")
+key = os.getenv("SUPABASE_KEY")
 supabase = create_client(url, key)
 
 question = "Total sales amount by product"
