@@ -64,19 +64,32 @@ const Sidebar = ({ currentPage, setCurrentPage, onUpload }) => {
       </div>
 
       <div className="section">
-        <h3>🛠️ SETTINGS</h3>
-        <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '8px' }}>Data Source</label>
-        <select value={dataSource} onChange={(e) => setDataSource(e.target.value)}>
-          <option value="demo">Demo Dataset</option>
-          <option value="upload">Upload Dataset</option>
-        </select>
+        <h3>🛠️ DATA ENGINE</h3>
+        <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '8px' }}>Active Dataset</label>
+        
+        <div style={{ marginBottom: '15px' }}>
+             <button 
+                onClick={() => onUpload(null, 'reset')}
+                className="reset-btn"
+                style={{ width: '100%', padding: '8px', fontSize: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', cursor: 'pointer', marginBottom: '10px' }}
+             >
+                🔄 Reset to Demo
+             </button>
+        </div>
 
-        {dataSource === 'upload' && (
-          <div className="upload-box">
-            <input type="file" accept=".csv" onChange={(e) => onUpload(e.target.files[0])} />
-            <p className="caption" style={{ marginTop: '10px', fontSize: '0.75rem', color: '#64748b' }}>Select CSV file to replace demo data.</p>
-          </div>
-        )}
+        <div className="upload-box" style={{ border: '2px dashed #1e293b', padding: '15px', borderRadius: '10px', textAlign: 'center' }}>
+            <label htmlFor="file-upload" style={{ cursor: 'pointer', color: '#00d4ff', fontSize: '0.85rem' }}>
+                📤 Upload New CSV
+            </label>
+            <input 
+                id="file-upload"
+                type="file" 
+                accept=".csv" 
+                onChange={(e) => onUpload(e.target.files[0])} 
+                style={{ display: 'none' }}
+            />
+            <p className="caption" style={{ marginTop: '10px', fontSize: '0.7rem', color: '#64748b' }}>Custom schema awareness will be applied.</p>
+        </div>
       </div>
 
       <div className="section" style={{ flexGrow: 1 }}>
@@ -258,6 +271,19 @@ const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, l
                   <button onClick={() => onExport(sortedData)} style={{ fontSize: '0.75rem', background: '#10b981', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: '6px', cursor: 'pointer' }}>📥 CSV</button>
                 </div>
               </div>
+              {uploadError && (
+        <div className="mt-4 p-4 rounded-lg bg-red-900/40 border border-red-500/50 text-red-200 text-sm animate-pulse-slow">
+          <p className="font-bold flex items-center mb-1">
+            <span className="mr-2">⚠️</span> {uploadError.includes('SQL Permission') ? 'Supabase Configuration Required' : 'Upload Failed'}
+          </p>
+          <p>{uploadError}</p>
+          {uploadError.includes('SQL Permission') && (
+            <div className="mt-3 p-3 bg-black/40 rounded border border-red-400/30 font-mono text-xs overflow-x-auto whitespace-pre">
+              {`CREATE OR REPLACE FUNCTION execute_sql(query text)\nRETURNS json SECURITY DEFINER AS $$\nBEGIN EXECUTE query; RETURN json_build_object('status','success');\nEND; $$ LANGUAGE plpgsql;`}
+            </div>
+          )}
+        </div>
+      )}
               <div className="table-wrapper">
                 <table>
                   <thead><tr>{Object.keys(sortedData[0] || {}).map(k => <th key={k}>{k.toUpperCase()}</th>)}</tr></thead>
@@ -507,14 +533,40 @@ function App() {
     }
   };
 
-  const handleFileUpload = async (file) => {
+  const handleFileUpload = async (file, action = 'upload') => {
+    if (action === 'reset') {
+        setLoading("🔄 Resetting to demo dataset...");
+        try {
+            await axios.post('http://localhost:5000/reset');
+            setResult(null);
+            setQuery('');
+            setDrillDownPath([]);
+            setToast("Back to Demo: Dataset reset successfully.");
+        } catch (err) {
+            setToast("Reset failed. Please try again.");
+        } finally {
+            setLoading(null);
+        }
+        return;
+    }
+
+    if (!file) return;
+
     const formData = new FormData();
     formData.append('file', file);
+    setLoading("📤 Uploading & Detecting Schema...");
+    
     try {
-      await axios.post('http://localhost:5000/upload', formData);
-      alert('Success: File processed.');
+      const response = await axios.post('http://localhost:5000/upload', formData);
+      setToast(`Success: ${response.data.message}`);
+      setResult(null); // Clear previous results to reflect new schema
+      setQuery('');
+      setDrillDownPath([]);
     } catch (err) {
-      alert('Upload failed.');
+      const msg = err.response?.data?.error || "Upload failed.";
+      setToast(`Upload failed: ${msg}`);
+    } finally {
+      setLoading(null);
     }
   };
 

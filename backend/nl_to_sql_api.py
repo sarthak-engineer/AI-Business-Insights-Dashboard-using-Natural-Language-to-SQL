@@ -347,40 +347,13 @@ def validate_query(query: str):
             return True, None
         return False, "Unclear query. Please rephrase with more business context."
 
-def generate_sql(nl_query, table_name="ecommerce_behavior", columns=None):
-    if columns is None:
-        columns = DEFAULT_COLUMNS
-    
-    # Step -1: Input Validation Layer (AI-Driven Pre-Check)
-    is_valid, error_msg = validate_query(nl_query)
-    if not is_valid:
-        logger.warning(f"BLOCKED: Invalid query detected: {nl_query}")
-        return None, nl_query, error_msg # Return None as SQL to trigger error in app.py
-    
-    # Step 0: Apply Semantic Layer
-    enhanced_query = apply_semantic_layer(nl_query)
-    
-    # Step 0.5: Detect Intents (Additive Enhancement)
-    detected_intents = detect_intents(enhanced_query)
-    intents_str = ", ".join(detected_intents)
-    
-    # Step 0.6: Extract Column Hints (Additive Enhancement)
-    # Using nl_query (original) to catch synonyms accurately
-    column_hints = extract_column_hints(nl_query, COLUMN_SYNONYMS)
-    hints_str = json.dumps(column_hints) if column_hints else "None"
-    
-    # Step 0.7: Detect Top-K Preference (Additive Enhancement)
-    top_k = extract_top_k(nl_query)
-    top_k_str = str(top_k) if top_k else "None"
-    
-    # Step 1: AI-based SQL generation
-    try:
-        columns_str = ", ".join(columns)
-        prompt = f"""
-You are an expert SQL generator for a Business Insights Dashboard.
-Your goal is to convert the user's natural language question into a valid, optimized PostgreSQL query for the table: {table_name}.
-
---- TABLE SCHEMA ---
+def get_schema_context(table_name, schema):
+    """
+    Constructs a schema context string for the AI prompt.
+    """
+    if not schema:
+        # Fallback to default demo schema
+        return """
 - Customer_ID (INT)
 - Age (INT)
 - Gender (TEXT)
@@ -409,6 +382,76 @@ Your goal is to convert the user's natural language question into a valid, optim
 - Purchase_Intent (TEXT)
 - Shipping_Preference (TEXT)
 - Time_to_Decision (FLOAT)
+"""
+    
+    context = []
+    for col in schema.get("columns", []):
+        col_name = col["clean"]
+        col_type = col["type"].upper()
+        # Add hints for common business terms
+        hint = ""
+        if col_name in ["purchase_amount", "amount", "sales", "revenue"]:
+            hint = " -- This is the 'Sales' or 'Revenue' or 'Spending'"
+        elif col_type == "TIMESTAMP":
+            hint = " -- Use this for date/time filters"
+            
+        context.append(f"- {col_name} ({col_type}){hint}")
+    
+    return "\n".join(context)
+
+def fix_sql_type_casts_dynamic(sql: str, schema: dict) -> str:
+    """
+    Dynamically applies type casts based on the provided schema.
+    """
+    numeric_cols = set(schema.get("numeric", []))
+    categorical_cols = set(schema.get("categorical", []))
+    date_cols = set(schema.get("date", []))
+    
+    # 1. Numeric casts for aggregates
+    for func in AGGREGATE_FUNCS:
+        for col in numeric_cols:
+            pattern = rf'(?i)({func}\(\s*)({col})(\s*\))'
+            sql = re.sub(pattern, rf'\1\2::NUMERIC\3', sql)
+
+    # 2. Prevent numeric casts on categorical
+    for col in categorical_cols:
+        pattern = rf'(?i)(\b{col}\b)\s*::\s*NUMERIC'
+        sql = re.sub(pattern, col, sql)
+
+    return sql
+
+def generate_sql(nl_query, table_name="ecommerce_behavior", schema=None):
+    # Step -1: Input Validation Layer (AI-Driven Pre-Check)
+    is_valid, error_msg = validate_query(nl_query)
+    if not is_valid:
+        logger.warning(f"BLOCKED: Invalid query detected: {nl_query}")
+        return None, nl_query, error_msg # Return None as SQL to trigger error in app.py
+    
+    # Step 0: Apply Semantic Layer
+    enhanced_query = apply_semantic_layer(nl_query)
+    
+    # Step 0.5: Detect Intents (Additive Enhancement)
+    detected_intents = detect_intents(enhanced_query)
+    intents_str = ", ".join(detected_intents)
+    
+    # Step 0.6: Extract Column Hints (Additive Enhancement)
+    column_hints = extract_column_hints(nl_query, COLUMN_SYNONYMS)
+    hints_str = json.dumps(column_hints) if column_hints else "None"
+    
+    # Step 0.7: Detect Top-K Preference (Additive Enhancement)
+    top_k = extract_top_k(nl_query)
+    top_k_str = str(top_k) if top_k else "None"
+    
+    # Step 1: AI-based SQL generation
+    try:
+        schema_context = get_schema_context(table_name, schema)
+        
+        prompt = f"""
+You are an expert SQL generator for a Business Insights Dashboard.
+Your goal is to convert the user's natural language question into a valid, optimized PostgreSQL query for the table: {table_name}.
+
+--- TABLE SCHEMA ---
+{schema_context}
 
 --- SEMANTIC GUIDANCE (CONTEXT) ---
 1. DETECTED INTENTS: {intents_str}
@@ -421,9 +464,9 @@ Your goal is to convert the user's natural language question into a valid, optim
    - Return ONLY the SQL query. No explanation, no markdown blocks.
 
 2. METRIC SELECTION:
-   - "Sales", "Revenue", "Earnings", "Total Amount" -> Use SUM(purchase_amount)
+   - "Sales", "Revenue", "Earnings", "Total Amount" -> Use SUM(...) of the appropriate numeric column.
    - "Count", "Number", "How many", "Orders", "Transactions" -> Use COUNT(*)
-   - "Average", "Mean", "Per User" -> Use AVG(purchase_amount)
+   - "Average", "Mean", "Per User" -> Use AVG(...) of the appropriate numeric column.
 
 3. PERCENTAGE / RATIO calculations (CRITICAL):
    - DO NOT use COUNT(condition).
@@ -434,7 +477,6 @@ Your goal is to convert the user's natural language question into a valid, optim
 
 4. CATEGORICAL FILTERS:
    - Always use LOWER(TRIM(COALESCE(column_name, ''))) = 'lowercase_val'.
-   - For Yes/No columns like 'Discount_Used', use: LOWER(TRIM(COALESCE(discount_used, ''))) = 'yes'.
 
 5. TOP-K / LIMIT:
    - If 'Top-K Preference' is a number, apply LIMIT accordingly.
@@ -453,7 +495,7 @@ Your goal is to convert the user's natural language question into a valid, optim
                 return cached_val["sql"], enhanced_query, cached_val["chart"]
             return cached_val, enhanced_query, "bar" # Backward compatibility for old cache
 
-        actual_model = MODEL_MAPPING.get("groq-1", "groq-1")
+        actual_model = MODEL_MAPPING.get("groq-1", "llama-3.3-70b-versatile")
         response = client.chat.completions.create(
             model=actual_model,
             messages=[
@@ -467,7 +509,12 @@ Your goal is to convert the user's natural language question into a valid, optim
         if response and response.choices[0].message.content:
             sql_text = response.choices[0].message.content.strip()
             sql_text = sql_text.replace("```sql", "").replace("```", "").strip()
-            sql_text = fix_sql_type_casts(sql_text)
+            
+            # Use dynamic column types for fixing SQL if schema is available
+            if schema:
+                sql_text = fix_sql_type_casts_dynamic(sql_text, schema)
+            else:
+                sql_text = fix_sql_type_casts(sql_text)
             
             print(f"Final SQL: {sql_text}")
             logger.info(f"AI SQL Generation complete. Length: {len(sql_text)}")
@@ -480,7 +527,6 @@ Your goal is to convert the user's natural language question into a valid, optim
             return sql_text, enhanced_query, suggested_chart
         else:
             raise Exception("AI returned empty content")
-            
     except Exception as e:
         print(f"⚠️ AI Generation Error: {str(e)}")
         # Step 2: Fallback Layer
@@ -488,4 +534,5 @@ Your goal is to convert the user's natural language question into a valid, optim
         # Attempt minimal chart detection for fallback
         fallback_chart = suggest_chart_type(nl_query, ["general"], sql_fallback or "")
         return sql_fallback, enhanced_query, fallback_chart
+
 

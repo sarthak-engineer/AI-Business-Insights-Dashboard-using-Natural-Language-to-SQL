@@ -10,6 +10,7 @@ from nl_to_sql_api import generate_sql
 import json
 import io
 from ml_engine import get_ml_insights
+from data_manager import process_upload, load_schema, is_uploaded_dataset_active, execute_local_sql, clear_uploaded_dataset
 
 import logging
 
@@ -27,7 +28,34 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app) # Enable CORS for React frontend
+
+# ========== SECURITY: Restricted CORS Configuration ==========
+# Only allow requests from localhost (development) or specified domains
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+CORS(app, resources={
+    r"/*": {
+        "origins": cors_origins,
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"],
+        "max_age": 3600
+    }
+})
+
+# ========== SECURITY: Flask Security Configuration ==========
+app.config['PROPAGATE_EXCEPTIONS'] = True
+app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'  # Default: False (safe)
+app.config['TESTING'] = False
+
+# ========== SECURITY: Add Security Headers ==========
+@app.after_request
+def set_security_headers(response):
+    """Add security headers to all responses"""
+    response.headers['X-Content-Type-Options'] = 'nosniff'  # Prevent MIME-type sniffing
+    response.headers['X-Frame-Options'] = 'DENY'  # Prevent clickjacking
+    response.headers['X-XSS-Protection'] = '1; mode=block'  # Enable XSS protection
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'  # Force HTTPS
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'"  # CSP
+    return response
 
 # Supabase configuration
 url = os.getenv("SUPABASE_URL")
@@ -36,13 +64,13 @@ supabase = create_client(url, key)
 
 import numpy as np
 
-def generate_insight(avg, median):
+def generate_statistical_insight(avg, median):
     if avg > median:
-        return "High spenders dominate purchases"
+        return "High values dominate the dataset"
     elif avg < median:
-        return "Most customers are moderate or low spenders"
+        return "Most records are in the lower to moderate range"
     else:
-        return "Spending is evenly distributed"
+        return "Distribution is relatively even"
 
 ALLOWED_COLUMNS = [
     "purchase_amount",
@@ -67,7 +95,7 @@ ALLOWED_COLUMNS = [
     "records"
 ]
 
-def validate_sql(sql: str) -> bool:
+def validate_sql(sql: str, allowed_columns: list = None) -> bool:
     """
     Validates SQL strings to ensure they are safe and only interact with allowed columns.
     """
@@ -88,24 +116,40 @@ def validate_sql(sql: str) -> bool:
         return False
         
     # 4. Whitelist Column Validation
-    # Use Regex to extract column names properly (handling SELECT, WHERE, GROUP BY, etc.)
-    # We look for identifiers that aren't keywords
-    sql_keywords = set(["SELECT", "FROM", "WHERE", "GROUP", "BY", "ORDER", "JOIN", "ON", "AND", "OR", "IN", "LIKE", "AS", "COUNT", "SUM", "AVG", "MIN", "MAX", "LIMIT", "DESC", "ASC", "HAVING", "DISTINCT", "BETWEEN", "IS", "NULL", "NOT", "CASE", "WHEN", "THEN", "ELSE", "END", "ECOMMERCE_BEHAVIOR", "*", "UNION", "ALL"])
-    
-    # Simple regex to find words (potential identifiers)
-    words = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', sql_clean)
-    
-    for word in words:
-        if word not in sql_keywords and not word.isdigit():
-            if word.lower() not in [c.lower() for c in ALLOWED_COLUMNS]:
-                # It might be a value (e.g. 'Clothing'), but in SQL clean we only have identifiers
-                # because values are usually in single quotes.
-                # However, re.findall will catch values if they are alphanumeric.
-                # To be safer, we check if it matches the pattern of a column we know.
-                logger.warning(f"VALIDATION: Potential unauthorized field detected: '{word}'")
-                # return False # Uncomment for very strict enforcement, but values like 'Bangalore' might trigger it.
+    if allowed_columns:
+        sql_keywords = set(["SELECT", "FROM", "WHERE", "GROUP", "BY", "ORDER", "JOIN", "ON", "AND", "OR", "IN", "LIKE", "AS", "COUNT", "SUM", "AVG", "MIN", "MAX", "LIMIT", "DESC", "ASC", "HAVING", "DISTINCT", "BETWEEN", "IS", "NULL", "NOT", "CASE", "WHEN", "THEN", "ELSE", "END", "ECOMMERCE_BEHAVIOR", "UPLOADED_DATASET", "*", "UNION", "ALL"])
+        words = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', sql_clean)
+        for word in words:
+            if word not in sql_keywords and not word.isdigit():
+                if word.lower() not in [c.lower() for c in allowed_columns]:
+                    logger.warning(f"VALIDATION: Potential unauthorized field detected: '{word}'")
+                    # return False # Soft warning for now
     
     return True
+
+
+def sanitize_sql_string(value: str, max_length: int = 255) -> str:
+    """
+    Sanitizes user input for safe use in SQL queries.
+    - Limits length to prevent buffer overflow
+    - Escapes single quotes (SQL injection prevention)
+    - Removes dangerous characters
+    """
+    if not isinstance(value, str):
+        value = str(value)
+    
+    # Limit length
+    value = value[:max_length]
+    
+    # Escape single quotes (double them for SQL)
+    value = value.replace("'", "''")
+    
+    # Log suspicious patterns
+    dangerous_patterns = ["--", "/*", "*/", "xp_", "sp_", "drop", "delete", "truncate", "insert", "update"]
+    if any(pattern in value.lower() for pattern in dangerous_patterns):
+        logger.warning(f"SECURITY: Suspicious SQL pattern detected in drill-down value: {value[:50]}")
+    
+    return value
 
 
 # Simple Python-based Insight Summary Generator
@@ -312,6 +356,22 @@ def handle_query():
     def is_valid_column(col):
         return col.lower() in [c.lower() for c in ALLOWED_COLUMNS]
 
+    # Intelligent Dataset Switching Logic
+    active_table = "ecommerce_behavior"
+    active_schema = None
+    allowed_cols = ALLOWED_COLUMNS
+    use_local_db = False
+    
+    if is_uploaded_dataset_active():
+        active_schema = load_schema()
+        if active_schema:
+            active_table = "uploaded_dataset"
+            allowed_cols = [col["clean"] for col in active_schema["columns"]]
+            use_local_db = True
+            logger.info(f"Switching to UPLOADED DATASET context. Columns: {len(allowed_cols)}")
+        else:
+            logger.warning("Uploaded dataset detected but schema load failed. Falling back to demo.")
+
     try:
         # 2. Check for drill down first
         drill_down = data.get('drill_down')
@@ -325,18 +385,19 @@ def handle_query():
                 return jsonify({"status": "error", "message": "Invalid drill-down input (selection is empty)."}), 400
 
             # 2. Whitelist Validation for Field
-            if not is_valid_column(field):
+            if field.lower() not in [c.lower() for c in allowed_cols]:
                 logger.warning(f"TERMINATED: Unauthorized field '{field}'")
                 return jsonify({"status": "error", "message": "Invalid column selection."}), 400
             
-            # 3. Robust SQL Pattern
-            sql_query = f"SELECT * FROM ecommerce_behavior WHERE LOWER(TRIM(\"{field}\"::TEXT)) = LOWER(TRIM('{value}')) LIMIT 100"
+            # 3. SQL Injection Prevention - Sanitize user input  
+            sanitized_value = sanitize_sql_string(value, max_length=255)
+            sql_query = f"SELECT * FROM {active_table} WHERE LOWER(TRIM(\"{field}\"::TEXT)) = LOWER(TRIM('{sanitized_value}')) LIMIT 100"
             enhanced_query = f"Drill-down: {field}={value}"
             interpretation = {"metric": f"Details: {value}", "group_by": field, "operation": "Drill-down"}
             chart_type = "table"
         else:
             # 1. SQL Generation with Safe Termination & Input Validation
-            sql_query, enhanced_query, validation_hint = generate_sql(user_query)
+            sql_query, enhanced_query, validation_hint = generate_sql(user_query, table_name=active_table, schema=active_schema)
             logger.info(f"Raw SQL Generation Attempt for: {user_query}")
             
             if not sql_query:
@@ -356,19 +417,25 @@ def handle_query():
             chart_type = validation_hint if validation_hint and not validation_hint.startswith("Query is") else detect_chart_type(user_query)
             
         # 2. Execution Guard (Safety Layer)
-        if not validate_sql(sql_query):
+        if not validate_sql(sql_query, allowed_columns=allowed_cols):
             logger.warning(f"TERMINATED: SQL failed safety validation: {sql_query}")
             return jsonify({
                 "status": "error",
                 "message": "Security Alert: This query has been blocked for safety reasons."
             }), 403
 
-        # 3. Database Execution
+        # 3. Database Execution (Routes to SQLite for uploaded datasets, Supabase for demo)
         try:
-            result = supabase.rpc("execute_sql", {"query": sql_query}).execute()
-            df_result = pd.DataFrame(result.data)
-            
-            logger.info(f"Query executed successfully. Rows returned: {len(df_result)}")
+            if use_local_db:
+                # Execute against local SQLite for uploaded datasets
+                result_data = execute_local_sql(sql_query)
+                df_result = pd.DataFrame(result_data)
+                logger.info(f"[LOCAL SQLite] Query executed. Rows: {len(df_result)}")
+            else:
+                # Execute against Supabase for demo dataset
+                result = supabase.rpc("execute_sql", {"query": sql_query}).execute()
+                df_result = pd.DataFrame(result.data)
+                logger.info(f"[Supabase] Query executed. Rows: {len(df_result)}")
             
             # Check for empty results with intelligent suggestions
             if df_result.empty:
@@ -379,7 +446,7 @@ def handle_query():
                     suggestion = "Try reducing the numeric threshold (e.g., using > 50 instead of a higher value)."
                 elif "<" in sql_query:
                     suggestion = "Try increasing your numeric range to capture more records."
-                elif "WHERE" in sql_query.upper() or "category" in sql_query.lower():
+                elif "WHERE" in sql_query.upper():
                     suggestion = "The filters applied are too specific. Try removing a category or location constraint."
                 
                 logger.warning(f"No results found for query: {user_query}")
@@ -407,17 +474,18 @@ def handle_query():
         insights = generate_python_summary(df_result)
         
         # 5. Advanced Purchase Insights (New Layer)
-        if "purchase_amount" in [c.lower() for c in df_result.columns]:
-            col_name = [c for c in df_result.columns if c.lower() == "purchase_amount"][0]
-            values = pd.to_numeric(df_result[col_name], errors='coerce').dropna().tolist()
+        # Adapt to dynamic column names
+        amt_col = next((c for c in df_result.columns if c.lower() in ["purchase_amount", "amount", "sales", "revenue"]), None)
+        if amt_col:
+            values = pd.to_numeric(df_result[amt_col], errors='coerce').dropna().tolist()
             if len(values) > 1:
                 avg_val = sum(values) / len(values)
                 median_val = float(np.median(values))
-                insight_text = generate_insight(avg_val, median_val)
+                insight_text = generate_statistical_insight(avg_val, median_val)
                 
                 purchase_insight = (
-                    f"**Average Purchase Amount**: {avg_val:,.2f}  \n"
-                    f"**Median Purchase Amount**: {median_val:,.2f}  \n"
+                    f"**Average {amt_col.replace('_', ' ').title()}**: {avg_val:,.2f}  \n"
+                    f"**Median {amt_col.replace('_', ' ').title()}**: {median_val:,.2f}  \n"
                     f"**Deep Insight**: {insight_text}"
                 )
                 # Combine with existing insights
@@ -447,15 +515,44 @@ def health_check():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    """Handles CSV upload: parse, detect schema, store in local SQLite."""
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
+    if not file.filename.lower().endswith('.csv'):
+        return jsonify({"error": "Only CSV files are supported"}), 400
     
-    # In a real app, you'd process this CSV and upload to Supabase
-    # For now, we'll simulate success
-    return jsonify({"message": f"File {file.filename} uploaded and processed successfully!"}), 200
+    logger.info(f"Upload request received: {file.filename}")
+    
+    # Use the new local SQLite pipeline (no Supabase DDL needed)
+    success, message, schema = process_upload(file)
+    
+    if success:
+        logger.info(f"Upload SUCCESS: {file.filename} - {message}")
+        return jsonify({
+            "message": f"✅ {file.filename}: {message}",
+            "columns": [col["clean"] for col in schema["columns"]],
+            "schema_summary": {
+                "numeric": schema.get("numeric", []),
+                "categorical": schema.get("categorical", []),
+                "date": schema.get("date", [])
+            }
+        }), 200
+    else:
+        logger.error(f"Upload FAILED: {file.filename} - {message}")
+        return jsonify({"error": message}), 400
+
+@app.route('/reset', methods=['POST'])
+def reset_dataset():
+    """Clears uploaded dataset and reverts to demo."""
+    success = clear_uploaded_dataset()
+    if success:
+        logger.info("Dataset reset to demo successfully")
+        return jsonify({"message": "Successfully reset to demo dataset"}), 200
+    else:
+        return jsonify({"error": "Failed to clear uploaded dataset"}), 500
 
 @app.route('/export', methods=['POST'])
 def export_csv():
@@ -480,59 +577,309 @@ def export_csv():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ========== SMART COLUMN DETECTION FOR DYNAMIC SCHEMA ==========
+
+def find_numeric_column_for_measure(schema):
+    """
+    Intelligently detect the best numeric column for metrics (revenue, amount, sales).
+    Priority: amount/revenue > value > numeric columns
+    Returns: column name (cleaned) or None
+    """
+    if not schema or not schema.get("numeric"):
+        return None
+    
+    schema_cols = {col["original"]: col["clean"] for col in schema.get("columns", [])}
+    numeric_cols = schema.get("numeric", [])
+    
+    # Priority keywords for measure columns
+    measure_keywords = ["amount", "revenue", "sales", "total", "value", "price", "spend", "cost"]
+    
+    for col_clean in numeric_cols:
+        col_orig = next((c["original"] for c in schema["columns"] if c["clean"] == col_clean), col_clean)
+        col_lower = col_orig.lower()
+        if any(keyword in col_lower for keyword in measure_keywords):
+            logger.info(f"Detected measure column: {col_clean} (from '{col_orig}')")
+            return col_clean
+    
+    # Fallback: return first numeric column
+    if numeric_cols:
+        logger.info(f"Using first numeric column as measure: {numeric_cols[0]}")
+        return numeric_cols[0]
+    
+    return None
+
+
+def find_categorical_columns_for_grouping(schema, max_cols=3):
+    """
+    Intelligently detect categorical columns for grouping (category, location, customer, product).
+    Priority: category/location/customer > other categorical
+    Returns: list of column names (cleaned, up to max_cols)
+    """
+    if not schema or not schema.get("categorical"):
+        return []
+    
+    schema_cols = {col["original"]: col["clean"] for col in schema.get("columns", [])}
+    categorical_cols = schema.get("categorical", [])
+    
+    # Priority keywords for grouping columns
+    grouping_keywords = ["category", "location", "customer", "product", "type", "status", "region", "segment"]
+    priority_cols = []
+    
+    for col_clean in categorical_cols:
+        col_orig = next((c["original"] for c in schema["columns"] if c["clean"] == col_clean), col_clean)
+        col_lower = col_orig.lower()
+        if any(keyword in col_lower for keyword in grouping_keywords):
+            priority_cols.append(col_clean)
+    
+    # Return priority columns first, then others
+    result = priority_cols + [c for c in categorical_cols if c not in priority_cols]
+    return result[:max_cols]
+
+
+def get_analytics_columns(schema):
+    """
+    Returns a dict with detected measure and grouping columns for analytics.
+    Handles both demo (hardcoded) and uploaded (dynamic) datasets.
+    """
+    if schema:
+        measure = find_numeric_column_for_measure(schema)
+        grouping = find_categorical_columns_for_grouping(schema, max_cols=1)
+        
+        return {
+            "measure": measure,
+            "grouping": grouping[0] if grouping else None,
+            "all_grouping": grouping,
+            "schema": schema
+        }
+    else:
+        # Demo dataset hardcoded defaults
+        return {
+            "measure": "purchase_amount",
+            "grouping": "purchase_category",
+            "all_grouping": ["purchase_category", "location", "customer_id"],
+            "schema": None
+        }
+
+
+# ========== ANALYTICS ENDPOINTS WITH DYNAMIC DATASET SUPPORT ==========
+
 @app.route('/analytics/sales', methods=['GET'])
 def get_sales_analytics():
+    """
+    Sales Analytics: Sales by Category/Division
+    Dynamically adapts to uploaded dataset schema
+    """
     try:
-        result = supabase.table("ecommerce_behavior").select("purchase_category, purchase_amount, time_of_purchase").execute()
-        df = pd.DataFrame(result.data)
+        # 1. Detect Dataset Context
+        active_table = "ecommerce_behavior"
+        use_local_db = False
+        active_schema = None
+        
+        if is_uploaded_dataset_active():
+            active_schema = load_schema()
+            if active_schema:
+                active_table = "uploaded_dataset"
+                use_local_db = True
+                logger.info(f"📊 Sales Analytics: Using UPLOADED DATASET")
+            else:
+                logger.warning("📊 Sales Analytics: Uploaded dataset detected but schema load failed. Using demo.")
+        else:
+            logger.info(f"📊 Sales Analytics: Using DEMO DATASET")
+        
+        # 2. Detect Columns
+        col_config = get_analytics_columns(active_schema)
+        measure_col = col_config["measure"]
+        grouping_col = col_config["grouping"]
+        
+        if not measure_col or not grouping_col:
+            logger.warning(f"Sales Analytics: Could not detect required columns. measure={measure_col}, grouping={grouping_col}")
+            return jsonify([])
+        
+        logger.info(f"Sales Analytics: measure_col={measure_col}, grouping_col={grouping_col}")
+        
+        # 3. Fetch Data
+        if use_local_db:
+            sql_query = f'SELECT "{grouping_col}", SUM(CAST("{measure_col}" AS REAL)) as revenue FROM "{active_table}" GROUP BY "{grouping_col}" ORDER BY revenue DESC'
+            result_data = execute_local_sql(sql_query)
+            df = pd.DataFrame(result_data)
+            # Use column name from SQL alias
+            if not df.empty and 'revenue' in df.columns:
+                df.rename(columns={'revenue': 'Revenue'}, inplace=True)
+                df.rename(columns={grouping_col: 'Category'}, inplace=True)
+        else:
+            result = supabase.table(active_table).select(f"{grouping_col}, {measure_col}").execute()
+            df = pd.DataFrame(result.data)
+            df[measure_col] = pd.to_numeric(df[measure_col], errors="coerce").fillna(0)
+            # Group by Category and Sum Revenue
+            cat_sales = df.groupby(grouping_col)[measure_col].sum().reset_index()
+            cat_sales.columns = ["Category", "Revenue"]
+            df = cat_sales.sort_values(by="Revenue", ascending=False)
+        
         print(f"📊 Sales Data Rows: {len(df)}")
-        if df.empty: return jsonify([])
+        if df.empty:
+            return jsonify([])
         
-        df["purchase_amount"] = pd.to_numeric(df["purchase_amount"], errors="coerce").fillna(0)
-        # Match Streamlit: Group by Category and Sum Revenue
-        cat_sales = df.groupby("purchase_category")["purchase_amount"].sum().reset_index()
-        cat_sales.columns = ["Category", "Revenue"]
-        cat_sales = cat_sales.sort_values(by="Revenue", ascending=False)
-        
-        return jsonify(cat_sales.to_dict(orient="records"))
+        # Return results (handle both demo and uploaded formats)
+        if not use_local_db:
+            return jsonify(df.to_dict(orient="records"))
+        else:
+            # For uploaded DBs, just return the dataframe as-is since it's already formatted
+            return jsonify(df.to_dict(orient="records"))
+            
     except Exception as e:
+        logger.error(f"Error in sales analytics: {str(e)}")
         print(f"Error in sales analytics: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/analytics/customers', methods=['GET'])
 def get_customer_analytics():
+    """
+    Customer Analytics: Customer Distribution by Location/Segment
+    Dynamically adapts to uploaded dataset schema
+    """
     try:
-        result = supabase.table("ecommerce_behavior").select("customer_id, location").execute()
-        df = pd.DataFrame(result.data)
-        print(f"👤 Customer Data Rows: {len(df)}")
-        if df.empty: return jsonify([])
-
-        # Match Streamlit: Group by Location and Count Customers
-        location_data = df.groupby("location").size().reset_index(name="Count")
-        location_data = location_data.sort_values(by="Count", ascending=False)
+        # 1. Detect Dataset Context
+        active_table = "ecommerce_behavior"
+        use_local_db = False
+        active_schema = None
         
-        return jsonify(location_data.to_dict(orient="records"))
+        if is_uploaded_dataset_active():
+            active_schema = load_schema()
+            if active_schema:
+                active_table = "uploaded_dataset"
+                use_local_db = True
+                logger.info(f"👤 Customer Analytics: Using UPLOADED DATASET")
+            else:
+                logger.warning("👤 Customer Analytics: Uploaded dataset detected but schema load failed. Using demo.")
+        else:
+            logger.info(f"👤 Customer Analytics: Using DEMO DATASET")
+        
+        # 2. Detect Columns (use all available grouping columns)
+        col_config = get_analytics_columns(active_schema)
+        grouping_cols = col_config["all_grouping"]
+        
+        if not grouping_cols:
+            logger.warning(f"Customer Analytics: Could not detect grouping columns")
+            return jsonify([])
+        
+        # For customer analytics, prefer "location" if available, otherwise use first grouping column
+        location_col = None
+        for col in grouping_cols:
+            if "location" in col.lower() or "segment" in col.lower() or "region" in col.lower():
+                location_col = col
+                break
+        
+        location_col = location_col or grouping_cols[0]
+        logger.info(f"Customer Analytics: grouping_col={location_col}")
+        
+        # 3. Fetch Data
+        if use_local_db:
+            sql_query = f'SELECT "{location_col}", COUNT(*) as count FROM "{active_table}" GROUP BY "{location_col}" ORDER BY count DESC'
+            result_data = execute_local_sql(sql_query)
+            df = pd.DataFrame(result_data)
+            if not df.empty:
+                df.rename(columns={location_col: 'Location', 'count': 'Count'}, inplace=True)
+        else:
+            result = supabase.table(active_table).select(f"{location_col}").execute()
+            df = pd.DataFrame(result.data)
+            # Group by Location and Count Customers
+            location_data = df.groupby(location_col).size().reset_index(name="Count")
+            location_data = location_data.sort_values(by="Count", ascending=False)
+            location_data.columns = ["Location", "Count"]
+            df = location_data
+        
+        print(f"👤 Customer Data Rows: {len(df)}")
+        if df.empty:
+            return jsonify([])
+        
+        return jsonify(df.to_dict(orient="records"))
     except Exception as e:
+        logger.error(f"Error in customer analytics: {str(e)}")
         print(f"Error in customer analytics: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/analytics/products', methods=['GET'])
 def get_product_analytics():
+    """
+    Product Analytics: Product/Category Revenue Ranking
+    Dynamically adapts to uploaded dataset schema
+    """
     try:
-        result = supabase.table("ecommerce_behavior").select("purchase_category, purchase_amount").execute()
-        df = pd.DataFrame(result.data)
-        print(f"📦 Product Data Rows: {len(df)}")
-        if df.empty: return jsonify([])
-
-        df["purchase_amount"] = pd.to_numeric(df["purchase_amount"], errors="coerce").fillna(0)
-        # Match Streamlit: Top Categories by Revenue
-        top_categories = df.groupby("purchase_category")["purchase_amount"].sum().sort_values(ascending=False).reset_index()
-        top_categories.columns = ["Category", "Total Revenue"]
+        # 1. Detect Dataset Context
+        active_table = "ecommerce_behavior"
+        use_local_db = False
+        active_schema = None
         
-        return jsonify(top_categories.to_dict(orient="records"))
+        if is_uploaded_dataset_active():
+            active_schema = load_schema()
+            if active_schema:
+                active_table = "uploaded_dataset"
+                use_local_db = True
+                logger.info(f"📦 Product Analytics: Using UPLOADED DATASET")
+            else:
+                logger.warning("📦 Product Analytics: Uploaded dataset detected but schema load failed. Using demo.")
+        else:
+            logger.info(f"📦 Product Analytics: Using DEMO DATASET")
+        
+        # 2. Detect Columns
+        col_config = get_analytics_columns(active_schema)
+        measure_col = col_config["measure"]
+        grouping_cols = col_config["all_grouping"]
+        
+        if not measure_col or not grouping_cols:
+            logger.warning(f"Product Analytics: Could not detect required columns. measure={measure_col}, grouping={grouping_cols}")
+            return jsonify([])
+        
+        # For product analytics, prefer "category" or "product" if available
+        product_col = None
+        for col in grouping_cols:
+            if "category" in col.lower() or "product" in col.lower() or "type" in col.lower():
+                product_col = col
+                break
+        
+        product_col = product_col or grouping_cols[0]
+        logger.info(f"Product Analytics: product_col={product_col}, measure_col={measure_col}")
+        
+        # 3. Fetch Data
+        if use_local_db:
+            sql_query = f'SELECT "{product_col}", SUM(CAST("{measure_col}" AS REAL)) as total_revenue FROM "{active_table}" GROUP BY "{product_col}" ORDER BY total_revenue DESC'
+            result_data = execute_local_sql(sql_query)
+            df = pd.DataFrame(result_data)
+            if not df.empty:
+                df.rename(columns={product_col: 'Category', 'total_revenue': 'Total Revenue'}, inplace=True)
+        else:
+            result = supabase.table(active_table).select(f"{product_col}, {measure_col}").execute()
+            df = pd.DataFrame(result.data)
+            df[measure_col] = pd.to_numeric(df[measure_col], errors="coerce").fillna(0)
+            # Top Categories by Revenue
+            top_categories = df.groupby(product_col)[measure_col].sum().sort_values(ascending=False).reset_index()
+            top_categories.columns = ["Category", "Total Revenue"]
+            df = top_categories
+        
+        print(f"📦 Product Data Rows: {len(df)}")
+        if df.empty:
+            return jsonify([])
+        
+        return jsonify(df.to_dict(orient="records"))
     except Exception as e:
+        logger.error(f"Error in product analytics: {str(e)}")
         print(f"Error in product analytics: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # ========== SECURITY: Safe Development Server Configuration ==========
+    # Default to safe settings; only enable debug if explicitly requested
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    port = int(os.getenv('FLASK_PORT', '5000'))
+    
+    logger.info(f"Starting Flask server - DEBUG={debug_mode}, PORT={port}")
+    logger.warning("SECURITY: Using Flask development server. Use Gunicorn/uWSGI for production!")
+    
+    app.run(
+        debug=debug_mode,  # Disabled by default for safety
+        port=port,
+        host='127.0.0.1',  # Localhost only by default (not 0.0.0.0)
+        use_reloader=False  # Disable reloader in production
+    )

@@ -1,21 +1,102 @@
-# Environment variables
+# ========== SECURITY - CRITICAL ==========
+# Environment variables with secrets
 .env
+.env.local
+.env.*.local
 
-# Python technical noise
+# API Keys and credentials
+*.key
+*.pem
+*.crt
+*.p12
+
+# ========== DATABASE ==========
+*.db
+*.sqlite
+*.sqlite3
+uploaded_data.db
+schema.json
+uploaded_schema.json
+
+# ========== LOGS & TEMPORARY FILES ==========
+*.log
+*.log.*
+*.pid
+*.tmp
+
+# ========== PYTHON ==========
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
 venv/
 env/
+ENV/
+env.bak/
+venv.bak/
 
-# IDE and System files
+# ========== NODE & FRONTEND ==========
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm
+.eslintcache
+dist/
+build/
+
+# ========== IDE & EDITOR ==========
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 .DS_Store
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
 
-# Temporary/Log files
-*.txt
+# ========== OS & SYSTEM ==========
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# ========== PROJECT SPECIFIC ==========
 .builder/
 .system_generated/
 .tempmediaStorage/
 browser/
+test_output.txt
+test_upload_analytics.csv
+ai_query_cache.json
+backend/ai_query_cache.json
+uploaded_data.db
+*.pyc
