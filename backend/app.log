@@ -3443,3 +3443,46 @@ LIMIT 5;
 2026-03-27 15:15:19,762 - INFO - [Supabase] Query executed. Rows: 969
 2026-03-27 15:15:19,776 - INFO - 127.0.0.1 - - [27/Mar/2026 15:15:19] "POST /query HTTP/1.1" 200 -
 2026-03-27 15:36:45,700 - INFO - 127.0.0.1 - - [27/Mar/2026 15:36:45] "GET /health HTTP/1.1" 200 -
+2026-03-27 23:44:32,146 - INFO - Starting Flask server - DEBUG=False, PORT=5000
+2026-03-27 23:44:32,147 - WARNING - SECURITY: Using Flask development server. Use Gunicorn/uWSGI for production!
+2026-03-27 23:44:32,209 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2026-03-27 23:44:32,211 - INFO - [33mPress CTRL+C to quit[0m
+2026-03-28 00:08:12,562 - INFO - Starting Flask server on 0.0.0.0:5000 (DEBUG=False)
+2026-03-28 00:08:12,578 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.23:5000
+2026-03-28 00:08:12,581 - INFO - [33mPress CTRL+C to quit[0m
+2026-03-28 00:08:14,461 - INFO - Incoming Request Query: show which city has highest sales
+2026-03-28 00:08:14,464 - INFO - Switching to UPLOADED DATASET context. Columns: 9
+2026-03-28 00:08:14,464 - INFO - Semantic Layer applied. Enhanced query: show which location has highest purchase_amount
+2026-03-28 00:08:15,217 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-03-28 00:08:15,241 - INFO - AI SQL Generation complete. Length: 146
+2026-03-28 00:08:15,245 - INFO - Raw SQL Generation Attempt for: show which location has highest purchase_amount
+2026-03-28 00:08:15,250 - WARNING - VALIDATION: Potential unauthorized field detected: 'NUMERIC'
+2026-03-28 00:08:15,250 - WARNING - VALIDATION: Potential unauthorized field detected: 'PURCHASE_AMOUNT'
+2026-03-28 00:08:15,251 - WARNING - VALIDATION: Potential unauthorized field detected: 'PURCHASE_AMOUNT'
+2026-03-28 00:08:15,256 - INFO - [LOCAL SQLite] Query executed. Rows: 5
+2026-03-28 00:08:15,265 - INFO - 127.0.0.1 - - [28/Mar/2026 00:08:15] "POST /query HTTP/1.1" 200 -
+2026-03-28 00:08:17,013 - INFO - Removed uploaded schema file
+2026-03-28 00:08:17,014 - INFO - Removed uploaded SQLite database
+2026-03-28 00:08:17,014 - INFO - Dataset reset to demo successfully
+2026-03-28 00:08:17,014 - INFO - 127.0.0.1 - - [28/Mar/2026 00:08:17] "POST /reset HTTP/1.1" 200 -
+2026-03-28 00:08:31,352 - INFO - Upload request received: retail_sales_dataset.csv
+2026-03-28 00:08:31,360 - INFO - CSV loaded: 1000 rows, 9 columns
+2026-03-28 00:08:31,372 - INFO - Schema detected: 9 columns (5 numeric, 2 categorical, 1 date)
+2026-03-28 00:08:31,373 - INFO - SQLite CREATE: CREATE TABLE uploaded_dataset ("transaction_id" REAL, "date" TEXT, "customer_id" TEXT, "gender" TEXT, "age" REAL, "product_category" TEXT, "quantity" REAL, "price_per_unit" REAL, "total_amount" REAL)
+2026-03-28 00:08:31,415 - INFO - Uploaded 1000 rows to local SQLite 'uploaded_dataset'
+2026-03-28 00:08:31,418 - INFO - Schema saved to C:\Users\sarth\Desktop\AI-Business-Insights-Dashboard-using-Natural-Language-to-SQL\backend\uploaded_schema.json
+2026-03-28 00:08:31,418 - INFO - Upload SUCCESS: retail_sales_dataset.csv - Successfully processed 1000 rows with 9 columns
+2026-03-28 00:08:31,420 - INFO - 127.0.0.1 - - [28/Mar/2026 00:08:31] "POST /upload HTTP/1.1" 200 -
+2026-03-28 00:08:33,668 - INFO - Incoming Request Query: show which city has highest sales
+2026-03-28 00:08:33,670 - INFO - Switching to UPLOADED DATASET context. Columns: 9
+2026-03-28 00:08:33,670 - INFO - Semantic Layer applied. Enhanced query: show which location has highest purchase_amount
+2026-03-28 00:08:33,690 - INFO - Raw SQL Generation Attempt for: show which location has highest purchase_amount
+2026-03-28 00:08:33,690 - WARNING - VALIDATION: Potential unauthorized field detected: 'NUMERIC'
+2026-03-28 00:08:33,690 - WARNING - VALIDATION: Potential unauthorized field detected: 'PURCHASE_AMOUNT'
+2026-03-28 00:08:33,691 - WARNING - VALIDATION: Potential unauthorized field detected: 'PURCHASE_AMOUNT'
+2026-03-28 00:08:33,696 - INFO - [LOCAL SQLite] Query executed. Rows: 5
+2026-03-28 00:08:33,702 - INFO - 127.0.0.1 - - [28/Mar/2026 00:08:33] "POST /query HTTP/1.1" 200 -
