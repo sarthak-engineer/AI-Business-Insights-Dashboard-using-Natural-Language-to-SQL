@@ -8,7 +8,7 @@ import axios from 'axios';
 // ===== CONFIGURATION =====
 const API_CONFIG = {
   // Backend URL - Update based on environment
-  BASE_URL: (typeof process !== 'undefined' && process.env.REACT_APP_API_URL) || (import.meta.env && import.meta.env.VITE_API_URL) || 'http://localhost:5000',
+  BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
   
   // Timeout settings (ms)
   TIMEOUT: 30000,
@@ -18,18 +18,21 @@ const API_CONFIG = {
     enabled: true,
     attempts: 3,
     delay: 500, // ms, increases exponentially
-    statusCodes: [408, 502, 503, 504] // Only retry transient errors. 500 is usually a logic error.
+    statusCodes: [408, 502, 503, 504] // Only retry transient errors
   },
   
   // Error messages
   MESSAGES: {
-    CONNECTION_FAILED: 'Unable to connect to server. Please ensure the backend is running on http://localhost:5000',
+    CONNECTION_FAILED: 'Unable to connect to server. Please check the backend configuration.',
     TIMEOUT: 'Request timeout. Server took too long to respond.',
     SERVER_ERROR: 'Server error occurred. Please try again.',
     NETWORK_ERROR: 'Network error. Check your internet connection.',
     UNKNOWN_ERROR: 'An unexpected error occurred.'
   }
 };
+
+// Log active API URL (useful for troubleshooting deployment)
+console.info(`[API] Service initialized with BASE_URL: ${API_CONFIG.BASE_URL}`);
 
 // ===== AXIOS INSTANCE =====
 const apiClient = axios.create({
