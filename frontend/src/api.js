@@ -8,7 +8,7 @@ import axios from 'axios';
 // ===== CONFIGURATION =====
 const API_CONFIG = {
   // Backend URL - Update based on environment
-  BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
+  BASE_URL: import.meta.env.VITE_API_URL || "https://ai-business-insights-dashboard-using.onrender.com",
   
   // Timeout settings (ms)
   TIMEOUT: 30000,
