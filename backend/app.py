@@ -1,6 +1,7 @@
 # backend/app.py (Flask API Backend)
 import os
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from dotenv import load_dotenv
 from supabase import create_client
 import pandas as pd
@@ -28,71 +29,19 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# ========== SECURITY: Restricted CORS Configuration ==========
-# Define allowed origins
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:5175",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-    "http://127.0.0.1:5175",
-    "http://127.0.0.1:3000",
-]
+# ========== SECURITY: Production CORS Configuration ==========
+# Allow specific frontend origins via environment variable or default to localhost
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+CORS(app, resources={r"/*": {"origins": [frontend_url, "http://localhost:5173", "http://localhost:3000"]}},
+     supports_credentials=True)
 
+# Define additional security headers
 @app.after_request
-def apply_cors_headers(response):
-    """
-    Manually apply CORS headers to all responses.
-    This is a development-friendly CORS configuration that allows
-    requests from any localhost port.
-    """
-    # TEST: Add a test header to verify decorator is called
-    response.headers['X-Test-Header'] = 'CORS-Decorator-Called'
-    
-    origin = request.headers.get('Origin', '')
-    
-    # For development: Allow all localhost variants
-    # In production, you should restrict this to specific origins
-    if 'localhost' in origin or '127.0.0.1' in origin or not origin:
-        # Set CORS headers for localhost
-        response.headers['Access-Control-Allow-Origin'] = origin if origin else '*'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
-        response.headers['Access-Control-Max-Age'] = '3600'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['X-CORS-Applied'] = 'YES'
-    else:
-        # Still allow requests without origin (same-origin)
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-        response.headers['X-CORS-Applied'] = 'NO'
-    
-    # Security headers (don't interfere with CORS)
+def apply_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['X-XSS-Protection'] = '1; mode=block'
-    
     return response
-
-# Handle OPTIONS requests for CORS preflight
-@app.before_request
-def handle_preflight():
-    """Handle CORS preflight requests (OPTIONS method)"""
-    if request.method == "OPTIONS":
-        response = jsonify({"status": "ok"})
-        origin = request.headers.get('Origin', '')
-        
-        # Allow preflight for localhost
-        if 'localhost' in origin or '127.0.0.1' in origin or not origin:
-            response.headers['Access-Control-Allow-Origin'] = origin if origin else '*'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
-            response.headers['Access-Control-Max-Age'] = '86400'
-        
-        return response, 200
 
 # Supabase configuration
 url = os.getenv("SUPABASE_URL")
@@ -945,17 +894,16 @@ def get_product_analytics():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    # ========== SECURITY: Safe Development Server Configuration ==========
-    # Default to safe settings; only enable debug if explicitly requested
+    # ========== PRODUCTION SERVER CONFIGURATION ==========
+    # Render provides 'PORT' environment variable; fallback to 5000 for local dev
+    port = int(os.getenv('PORT', 5000))
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    port = int(os.getenv('FLASK_PORT', '5000'))
     
-    logger.info(f"Starting Flask server - DEBUG={debug_mode}, PORT={port}")
-    logger.warning("SECURITY: Using Flask development server. Use Gunicorn/uWSGI for production!")
+    logger.info(f"Starting Flask server on 0.0.0.0:{port} (DEBUG={debug_mode})")
     
     app.run(
-        debug=debug_mode,  # Disabled by default for safety
+        host='0.0.0.0', 
         port=port,
-        host='127.0.0.1',  # Localhost only by default (not 0.0.0.0)
-        use_reloader=False  # Disable reloader in production
+        debug=debug_mode,
+        use_reloader=False
     )

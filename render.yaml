@@ -1,0 +1,32 @@
+services:
+  # 🔹 Backend (Flask API Web Service)
+  - type: web
+    name: ai-business-insights-api
+    plan: free
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: gunicorn --chdir backend app:app
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: FRONTEND_URL
+        fromService:
+          type: static_site
+          name: ai-business-insights-ui
+          property: url
+
+  # 🔹 Frontend (React Static Site)
+  - type: static_site
+    name: ai-business-insights-ui
+    buildCommand: cd frontend && npm install && npm run build
+    publishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: ai-business-insights-api
+          property: url
