@@ -309,43 +309,125 @@ def get_fallback_sql(user_query, table_name="ecommerce_behavior"):
     # If totally unclear, return None so the caller can stop processing
     return None
 
-def validate_query(query: str):
+def is_meaningful_input(query: str) -> bool:
     """
-    Uses AI to classify if a query is meaningful/relevant or garbage/invalid.
-    Returns (is_valid, message)
+    Lightweight pre-check: Validates if input has minimum meaningful words (not just random chars/symbols).
+    Returns True if query contains at least 2 alphabetic words OR 1 clear business keyword.
+    
+    Problem 1 Fix: Catches obvious garbage input before AI processing.
+    """
+    if len(query.strip()) < 2:
+        return False
+    
+    # Extract alphabetic words (letters only, no numbers/symbols)
+    words = re.findall(r'\b[a-zA-Z]+\b', query)
+    
+    # Business keywords that alone justify a query
+    business_keywords = [
+        "sales", "revenue", "earnings", "income", "spending", "cost",
+        "count", "orders", "transactions", "customers", "products",
+        "average", "avg", "total", "maximum", "minimum", "max", "min",
+        "category", "gender", "location", "region", "channel"
+    ]
+    
+    # Single business keyword is acceptable
+    if len(words) >= 1:
+        first_word = words[0].lower()
+        if first_word in business_keywords:
+            return True
+    
+    # Need at least 2 valid alphabetic words
+    if len(words) < 2:
+        return False
+    
+    # Check if query is mostly random characters/gibberish (e.g., "yh566th6yt5h")
+    # A good query should have reasonable alphabetic content
+    total_chars = len(query)
+    alphabetic_chars = sum(1 for c in query if c.isalpha())
+    alpha_ratio = alphabetic_chars / total_chars if total_chars > 0 else 0
+    # If < 40% alphabetic, it's likely garbage
+    if alpha_ratio < 0.4:
+        return False
+    
+    return True
+
+def classify_query(query: str) -> tuple:
+    """
+    Classifies query into VALID, UNCLEAR, or INVALID using heuristics.
+    Optimized to avoid redundant AI Round-Trip Times (RTT).
+    """
+    # Step 1: Lightweight pre-check
+    if not is_meaningful_input(query):
+        return "INVALID", 0.0, None
+    
+    # Step 2: Heuristic keyword analysis
+    business_keywords = [
+        "sales", "revenue", "earning", "income", "amount", "spend", "purchas", "cost",
+        "count", "number", "how many", "total", "users", "orders", "transactions",
+        "avg", "average", "mean", "median", "percentage", "percent", "ratio", "proportion",
+        "highest", "top", "best", "rank", "maximum", "max", "min", "lowest",
+        "category", "gender", "location", "age", "rating", "discount", "product",
+        "customer", "trend", "growth", "change", "compare"
+    ]
+    
+    query_lower = query.lower()
+    keyword_count = sum(1 for kw in business_keywords if kw in query_lower)
+    confidence = min(1.0, keyword_count / 2.0) # 2+ keywords = high confidence
+    
+    if keyword_count >= 1:
+        return "VALID", confidence, None
+    elif len(query.strip().split()) >= 3:
+        # Longer queries without keywords might be natural language we should try
+        return "UNCLEAR", 0.4, None
+    else:
+        return "INVALID", 0.1, None
+
+def get_helpful_suggestions() -> list:
+    """
+    Problem 3 Fix: Returns helpful example queries for invalid/unclear input.
+    """
+    return [
+        "Total sales by category",
+        "Top 5 products by revenue",
+        "Customer count by region",
+        "Average purchase amount",
+        "Sales trend over time"
+    ]
+
+def validate_query(query: str) -> tuple:
+    """
+    Enhanced validation that uses classification system.
+    Problem 2, 3, 4, 5 Fix: Returns (is_valid: bool, error_message: str).
+    
+    Returns:
+        - (True, None) for VALID queries
+        - (False, helpful_message) for UNCLEAR or INVALID queries
     """
     if len(query.strip()) < 3:
-        return False, "Query is too short. Please ask a meaningful question."
-
-    try:
-        actual_model = MODEL_MAPPING.get("groq-1", "llama-3.3-70b-versatile")
-        prompt = f"""
-        Classify the following user query for a business dashboard as 'VALID' or 'INVALID'.
-        A query is VALID if it is a meaningful request for data, analytics, or business insights (e.g., "total sales", "highest revenue", "customer count").
-        A query is INVALID if it is garbage text, random characters, completely unrelated to business data, or non-sensical (e.g., "asdjkhaskjdh", "random test query abc", "what is the weather").
-
-        Query: "{query}"
-
-        Return ONLY the word 'VALID' or 'INVALID'.
-        """
-        
-        response = client.chat.completions.create(
-            model=actual_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=10
-        )
-        
-        result = response.choices[0].message.content.strip().upper()
-        if "INVALID" in result:
-            return False, "Invalid or unclear query. Please ask a meaningful question."
+        suggestions = get_helpful_suggestions()
+        suggestion_text = "\n".join(f"• {s}" for s in suggestions)
+        return False, f"Query too short. Try one of these:\n{suggestion_text}"
+    
+    # Use the new classification system
+    classification, confidence, _ = classify_query(query)
+    
+    if classification == "VALID":
         return True, None
-    except:
-        # Fallback to basic keyword check if AI validation fails
-        keywords = ["sales", "revenue", "count", "top", "highest", "average", "avg", "total", "category", "location"]
-        if any(w in query.lower() for w in keywords):
-            return True, None
-        return False, "Unclear query. Please rephrase with more business context."
+    
+    # Problem 3 Fix: Provide helpful error messages with suggestions
+    suggestions = get_helpful_suggestions()
+    suggestion_text = "\n".join(f"• {s}" for s in suggestions)
+    
+    if classification == "INVALID":
+        return False, f"That doesn't look like a valid business query. Try:\n{suggestion_text}"
+    
+    # classification == "UNCLEAR"
+    if confidence < 0.3:
+        # Low confidence unclear query
+        return False, f"That's a bit unclear. Could you be more specific? Try:\n{suggestion_text}"
+    else:
+        # Medium confidence - let it through but mark it
+        return True, None
 
 def get_schema_context(table_name, schema):
     """

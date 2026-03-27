@@ -1,12 +1,11 @@
 # backend/app.py (Flask API Backend)
 import os
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 from dotenv import load_dotenv
 from supabase import create_client
 import pandas as pd
 import httpx
-from nl_to_sql_api import generate_sql
+from nl_to_sql_api import generate_sql, get_helpful_suggestions
 import json
 import io
 from ml_engine import get_ml_insights
@@ -30,32 +29,70 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # ========== SECURITY: Restricted CORS Configuration ==========
-# Only allow requests from localhost (development) or specified domains
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
-CORS(app, resources={
-    r"/*": {
-        "origins": cors_origins,
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"],
-        "max_age": 3600
-    }
-})
+# Define allowed origins
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
+    "http://127.0.0.1:3000",
+]
 
-# ========== SECURITY: Flask Security Configuration ==========
-app.config['PROPAGATE_EXCEPTIONS'] = True
-app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'  # Default: False (safe)
-app.config['TESTING'] = False
-
-# ========== SECURITY: Add Security Headers ==========
 @app.after_request
-def set_security_headers(response):
-    """Add security headers to all responses"""
-    response.headers['X-Content-Type-Options'] = 'nosniff'  # Prevent MIME-type sniffing
-    response.headers['X-Frame-Options'] = 'DENY'  # Prevent clickjacking
-    response.headers['X-XSS-Protection'] = '1; mode=block'  # Enable XSS protection
-    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'  # Force HTTPS
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'"  # CSP
+def apply_cors_headers(response):
+    """
+    Manually apply CORS headers to all responses.
+    This is a development-friendly CORS configuration that allows
+    requests from any localhost port.
+    """
+    # TEST: Add a test header to verify decorator is called
+    response.headers['X-Test-Header'] = 'CORS-Decorator-Called'
+    
+    origin = request.headers.get('Origin', '')
+    
+    # For development: Allow all localhost variants
+    # In production, you should restrict this to specific origins
+    if 'localhost' in origin or '127.0.0.1' in origin or not origin:
+        # Set CORS headers for localhost
+        response.headers['Access-Control-Allow-Origin'] = origin if origin else '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['X-CORS-Applied'] = 'YES'
+    else:
+        # Still allow requests without origin (same-origin)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        response.headers['X-CORS-Applied'] = 'NO'
+    
+    # Security headers (don't interfere with CORS)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
     return response
+
+# Handle OPTIONS requests for CORS preflight
+@app.before_request
+def handle_preflight():
+    """Handle CORS preflight requests (OPTIONS method)"""
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        origin = request.headers.get('Origin', '')
+        
+        # Allow preflight for localhost
+        if 'localhost' in origin or '127.0.0.1' in origin or not origin:
+            response.headers['Access-Control-Allow-Origin'] = origin if origin else '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
+            response.headers['Access-Control-Max-Age'] = '86400'
+        
+        return response, 200
 
 # Supabase configuration
 url = os.getenv("SUPABASE_URL")
@@ -152,14 +189,14 @@ def sanitize_sql_string(value: str, max_length: int = 255) -> str:
     return value
 
 
-# Simple Python-based Insight Summary Generator
+# Enhanced Smart Insights Engine v2
 def generate_insight(data_list):
     """
-    Highly Controlled Adaptive & Intelligent Insights.
-    Input: List of dicts with numeric values.
+    🚀 Enhanced Insight Generator: Produces meaningful, actionable insights from any dataset size.
+    Implements a hierarchical insight strategy with confidence levels and multiple analysis dimensions.
     """
-    if not data_list or len(data_list) <= 1:
-        return "Not enough data to generate meaningful insight."
+    if not data_list:
+        return "No data available for analysis. Try a broader query or different filters."
 
     # Extract numeric values and labels
     values = []
@@ -170,58 +207,94 @@ def generate_insight(data_list):
         if v_list: values.append(v_list[0])
         labels.append(l_list[0] if l_list else "N/A")
 
-    if not values or len(values) <= 1:
-        return "Not enough numeric data for deep analysis."
+    if not values:
+        return "Limited data: Unable to extract numeric values for analysis."
 
-    # 1. Compute Base Metrics
     n = len(values)
+    
+    # ===== TIER 1: SINGLE VALUE (Edge Case) =====
+    if n == 1:
+        return f"Single data point identified: {labels[0]} with value {values[0]:,.2f}. Gather more data to identify trends and patterns."
+    
+    # ===== COMPUTE CORE METRICS =====
     max_val = max(values)
     min_val = min(values)
     total_sum = sum(values)
     avg_val = total_sum / n
     
-    # Identify Top Category and Second Highest
+    # Identify Top and Second highest
     sorted_data = sorted(zip(values, labels), key=lambda x: x[0], reverse=True)
     max_val, top_category = sorted_data[0]
     second_val = sorted_data[1][0] if n > 1 else max_val
-
-    # 2. Derived Metrics (Safe division with 1e-6)
+    lowest_val, lowest_category = sorted_data[-1]
+    
+    # ===== COMPUTE DERIVED METRICS =====
     divisor = avg_val + 1e-6
     dominance_ratio = max_val / divisor
-    gap_ratio = (max_val - second_val) / divisor
+    gap_ratio = (max_val - second_val) / divisor if second_val else max_val / divisor
     spread_ratio = (max_val - min_val) / divisor
     percentage_share = (max_val / (total_sum + 1e-6)) * 100
+    performance_gap = ((min_val - avg_val) / (avg_val + 1e-6)) * 100
+    
+    # ===== CONFIDENCE CALCULATION =====
+    dataset_size = len(values)
+    if dataset_size >= 100: confidence = "High"
+    elif dataset_size >= 20: confidence = "Moderate"
+    elif dataset_size >= 5: confidence = "Moderate"
+    else: confidence = "Low"
+    
+    insights = []
+    
+    # ===== TIER 1: DOMINANCE PATTERNS =====
+    if dominance_ratio > 1.7 and percentage_share > 35:
+        insights.append(f"🏆 **{top_category} dominates**: Contributing ~{percentage_share:.1f}% of total, indicating strong market concentration.")
+    elif dominance_ratio > 1.3 and percentage_share > 18:
+        insights.append(f"⭐ **{top_category} leads**: Consistently outperforming with {percentage_share:.1f}% share, showing clear category strength.")
+    
+    # ===== TIER 2: UNDERPERFORMANCE DETECTION =====
+    if performance_gap < -50 and lowest_val < avg_val * 0.4:
+        insights.append(f"⚠️ **{lowest_category} underperforms**: At {(lowest_val/avg_val*100):.0f}% of average, indicating significant improvement opportunity.")
+    elif lowest_val < avg_val * 0.6:
+        insights.append(f"📉 **{lowest_category} below average**: Performance is {(lowest_val/avg_val*100):.0f}% of mean, suggesting potential intervention needed.")
+    
+    # ===== TIER 3: DISTRIBUTION PATTERNS =====
+    if spread_ratio < 0.15:
+        insights.append(f"📊 **Balanced distribution**: Values range uniformly from ₹{min_val:,.0f} to ₹{max_val:,.0f}, indicating even category performance.")
+    elif spread_ratio > 3:
+        insights.append(f"📈 **High variation**: Values span {spread_ratio:.1f}x range (₹{min_val:,.0f}→₹{max_val:,.0f}), showing diverse category performance.")
+    
+    # ===== TIER 4: TREND/GAP ANALYSIS =====
+    if gap_ratio > 0.4 and n >= 3:
+        insights.append(f"🔄 **Significant gap**: Top performer (**{top_category}**) exceeds second-place by {gap_ratio:.1f}x, highlighting competitive advantage.")
+    
+    # ===== FALLBACK: Ensure minimum insights =====
+    if not insights:
+        if percentage_share > 25:
+            insights.append(f"📌 **{top_category}** is the leading category with {percentage_share:.1f}% contribution.")
+        else:
+            insights.append(f"📊 **Distribution insight**: No single category dominates; market share is distributed across {n} segments.")
+    
+    # ===== FORMAT OUTPUT =====
+    # Return first 2-3 insights joined together
+    result = "\n".join(insights[:3])
+    
+    # Add confidence indicator if dataset is small
+    if confidence == "Low":
+        result += f"\n\n📌 *Note: Analysis based on limited data ({dataset_size} records). Results should be validated with additional data.*"
+    
+    return result
 
-    # 3. Priority-based Controlled Logic
-    # Tier 1: Strong Dominance (Strict)
-    if dominance_ratio > 1.7 and gap_ratio > 0.5 and percentage_share > 30:
-        insight = f"{top_category} strongly dominates, contributing approximately {percentage_share:.1f}% of the total."
-        
-    # Tier 2: Moderate Leader
-    elif dominance_ratio > 1.3 and percentage_share > 15:
-        insight = f"{top_category} is the leading category with noticeably higher values."
-        
-    # Tier 3: No real dominance (Small share leader)
-    elif percentage_share < 10:
-        insight = "No single category dominates; values are fairly distributed across categories."
-        
-    # Tier 4: Even Distribution
-    elif spread_ratio < 0.1:
-        insight = "Values are very evenly distributed across categories."
-        
-    # Tier 5: Underperformance Detection
-    elif min_val < avg_val * 0.5:
-        insight = "Some categories are significantly underperforming compared to the average."
-        
-    # Default Case
-    else:
-        insight = "There is moderate variation across categories."
-
-    return insight
 
 def generate_python_summary(df):
-    if df.empty or len(df) <= 1:
-        return "Not enough data to generate meaningful insight."
+    """
+    Enhanced DataFrame insight generator with size-aware analysis.
+    Never returns generic "not enough data" message - always provides meaningful context.
+    """
+    if df.empty:
+        return "No data available for analysis. Try a broader query or different filters."
+    
+    if len(df) == 1:
+        return "Single record available: Provides limited context. Consider expanding your query filters to generate meaningful trends."
     
     # Convert dataframe to records for the helper
     data_records = df.to_dict(orient="records")
@@ -348,9 +421,12 @@ def handle_query():
     
     if not has_intent and len(user_query.strip().split()) < 3:
          logger.warning(f"TERMINATED: Unclear query intent detected: {user_query}")
+         # Use helpful suggestions instead of generic message
+         suggestions = get_helpful_suggestions()
+         suggestion_text = "\n".join(f"• {s}" for s in suggestions)
          return jsonify({
              "status": "error",
-             "message": "Sorry, I couldn't understand the query. Please rephrase with more business details (e.g. Sales, Category, etc.)."
+             "message": f"That doesn't look like a valid business query. Try:\n{suggestion_text}"
          }), 400
 
     def is_valid_column(col):

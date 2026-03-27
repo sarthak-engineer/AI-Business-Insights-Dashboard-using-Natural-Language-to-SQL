@@ -1,23 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
 } from 'recharts';
+import { api, handleApiError } from './api';
 import './App.css';
 
-const COLORS = ['#00d4ff', '#0088fe', '#00C49F', '#FFBB28', '#FF8042'];
+// 🎨 Enhanced Color Palettes
+const COLORS_PIE = ['#00D1FF', '#7C3AED', '#F59E0B', '#10B981', '#EF4444'];
+const COLORS_BAR = ['#00D1FF', '#7C3AED', '#14B8A6', '#F59E0B', '#10B981', '#06B6D4', '#8B5CF6', '#EC4899'];
+const COLORS_ACCENT = { positive: '#22C55E', negative: '#EF4444', warning: '#F59E0B' };
 
-// Custom Tooltip for Dark Theme
+// Custom Tooltip for Dark Theme with Enhanced Styling
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="custom-tooltip" style={{ backgroundColor: '#020617', padding: '15px', border: '1px solid #334155', borderRadius: '10px' }}>
-        <p className="label" style={{ color: '#00d4ff', fontWeight: 'bold', marginBottom: '5px' }}>{label}</p>
-        <p style={{ color: '#64748b', fontSize: '11px', marginBottom: '8px' }}>🖱️ Click bar for detailed view</p>
+      <div className="custom-tooltip" style={{ 
+        backgroundColor: '#0f172a', 
+        padding: '12px 16px', 
+        border: '2px solid #00d4ff', 
+        borderRadius: '8px',
+        boxShadow: '0 8px 32px rgba(0, 212, 255, 0.15)',
+        backdropFilter: 'blur(10px)'
+      }}>
+        <p className="label" style={{ color: '#00d4ff', fontWeight: 'bold', marginBottom: '8px', fontSize: '13px' }}>{label}</p>
         {payload.map((entry, index) => (
-          <p key={index} style={{ color: '#fff', fontSize: '13px' }}>
-            {`${entry.name}: ${Number(entry.value).toLocaleString()}`}
+          <p key={index} style={{ color: entry.color || '#cbd5e1', fontSize: '12px', marginBottom: '4px' }}>
+            <span style={{ fontWeight: '500' }}>{entry.name}:</span> {Number(entry.value).toLocaleString()}
           </p>
         ))}
       </div>
@@ -60,7 +69,7 @@ const Sidebar = ({ currentPage, setCurrentPage, onUpload }) => {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <div className="logo">📁 AI DASHBOARD</div>
+        <div className="logo">✨ AI Business Insights</div>
       </div>
 
       <div className="section">
@@ -97,7 +106,7 @@ const Sidebar = ({ currentPage, setCurrentPage, onUpload }) => {
         <nav>
           <button className={currentPage === 'ai-query' ? 'active' : ''} onClick={() => setCurrentPage('ai-query')}>📊 AI Query</button>
           <button className={currentPage === 'sales' ? 'active' : ''} onClick={() => setCurrentPage('sales')}>💰 Sales Analytics</button>
-          <button className={currentPage === 'customer' ? 'active' : ''} onClick={() => setCurrentPage('customer')}>👤 Customer Analytics</button>
+          <button className={currentPage === 'customer' ? 'active' : ''} onClick={() => setCurrentPage('customer')}>👤 Customer Insights</button>
           <button className={currentPage === 'product' ? 'active' : ''} onClick={() => setCurrentPage('product')}>📦 Product Analytics</button>
         </nav>
       </div>
@@ -119,6 +128,18 @@ const Sidebar = ({ currentPage, setCurrentPage, onUpload }) => {
 const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, loading, result, error, drillDownPath, filters, setFilters, onExport }) => {
   const [showSql, setShowSql] = useState(false);
   const [sortOrder, setSortOrder] = useState('none');
+  const [localQuery, setLocalQuery] = useState(query);
+
+  // Sync with parent query if it changes externally (e.g. on reset)
+  useEffect(() => {
+    setLocalQuery(query);
+  }, [query]);
+
+  const onLocalSubmit = (e) => {
+    e.preventDefault();
+    setQuery(localQuery); // Sync to parent exactly when running
+    handleSubmit(e, localQuery);
+  };
 
   const getSortedData = (data) => {
     if (sortOrder === 'none' || !data || data.length === 0) return data;
@@ -170,19 +191,25 @@ const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, l
         if (chartType === 'line') {
           return (
             <AreaChart data={sortedData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+              <defs>
+                <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#00D1FF" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#7C3AED" stopOpacity={0.1}/>
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis dataKey={xKey} stroke="#fff" tick={{fill: '#fff'}} fontSize={11} angle={-45} textAnchor="end" interval={0} />
-              <YAxis stroke="#fff" tick={{fill: '#fff'}} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: formatLabel(yKey), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
+              <XAxis dataKey={xKey} stroke="#fff" tick={{fill: '#cbd5e1', fontSize: 11}} fontSize={11} angle={-45} textAnchor="end" interval={0} />
+              <YAxis stroke="#fff" tick={{fill: '#cbd5e1', fontSize: 11}} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: formatLabel(yKey), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey={yKey} stroke="#00d4ff" fill="#00d4ff" fillOpacity={0.3} strokeWidth={3} name={formatLabel(yKey)} onClick={(e) => { const val = e.activeLabel || (e.payload && e.payload[xKey]); if (val) handleDrillDown(xKey, val); }} style={{ cursor: 'pointer' }} />
+              <Area type="monotone" dataKey={yKey} stroke="#00D1FF" fill="url(#colorGradient)" fillOpacity={0.6} strokeWidth={3} name={formatLabel(yKey)} onClick={(e) => { const val = e.activeLabel || (e.payload && e.payload[xKey]); if (val) handleDrillDown(xKey, val); }} style={{ cursor: 'pointer', transition: 'all 0.3s ease' }} />
             </AreaChart>
           );
         }
         if (chartType === 'pie') {
           return (
             <PieChart>
-              <Pie data={sortedData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey={yKey} nameKey={xKey} onClick={(e) => { const val = e && e.payload ? e.payload[xKey] : (e ? (e.name || e[xKey]) : null); if (val) handleDrillDown(xKey, val); }} style={{ cursor: 'pointer' }} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                {sortedData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+              <Pie data={sortedData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey={yKey} nameKey={xKey} onClick={(e) => { const val = e && e.payload ? e.payload[xKey] : (e ? (e.name || e[xKey]) : null); if (val) handleDrillDown(xKey, val); }} style={{ cursor: 'pointer', transition: 'all 0.3s ease' }} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                {sortedData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />)}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
@@ -191,10 +218,14 @@ const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, l
         return (
           <BarChart data={sortedData} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-            <XAxis dataKey={xKey} stroke="#fff" tick={{fill: '#fff'}} fontSize={11} angle={-45} textAnchor="end" interval={0} />
-            <YAxis stroke="#fff" tick={{fill: '#fff'}} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: formatLabel(yKey), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
+            <XAxis dataKey={xKey} stroke="#fff" tick={{fill: '#cbd5e1', fontSize: 11}} fontSize={11} angle={-45} textAnchor="end" interval={0} />
+            <YAxis stroke="#fff" tick={{fill: '#cbd5e1', fontSize: 11}} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: formatLabel(yKey), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey={yKey} fill="#00d4ff" radius={[6, 6, 0, 0]} name={formatLabel(yKey)} onClick={(e) => { const val = e[xKey] || (e.payload && e.payload[xKey]); if (val) handleDrillDown(xKey, val); }} style={{ cursor: 'pointer' }} />
+            <Bar dataKey={yKey} fill="#00D1FF" radius={[6, 6, 0, 0]} name={formatLabel(yKey)} onClick={(e) => { const val = e[xKey] || (e.payload && e.payload[xKey]); if (val) handleDrillDown(xKey, val); }} style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}>
+              {sortedData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS_BAR[index % COLORS_BAR.length]} style={{ transition: 'filter 0.3s ease' }} />
+              ))}
+            </Bar>
           </BarChart>
         );
       };
@@ -218,7 +249,10 @@ const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, l
   return (
     <div className="main-content-inner">
       <header className="page-header">
-        <h1>Dashboard <span style={{ color: '#64748b', fontWeight: '400' }}>/ AI Intelligence</span></h1>
+        <div className="header-content">
+          <h1>AI Business Insights</h1>
+          <p className="header-subtitle">Transform natural language into actionable data insights</p>
+        </div>
       </header>
       <div className="breadcrumb-container" style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
         {drillDownPath.length > 0 && <button className="back-btn" onClick={goBack}>← BACK</button>}
@@ -228,8 +262,8 @@ const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, l
         </div>
       </div>
       <div className="card input-card">
-        <form onSubmit={handleSubmit} className="query-form">
-          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search your data..." className="query-input" />
+        <form onSubmit={onLocalSubmit} className="query-form">
+          <input type="text" value={localQuery} onChange={(e) => setLocalQuery(e.target.value)} placeholder="Search your data..." className="query-input" />
           <button type="submit" disabled={loading} className="query-btn">{loading ? '⏳...' : '🚀 RUN'}</button>
         </form>
         <div className="filters-container" style={{ marginTop: '15px', display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid #1e293b', paddingTop: '15px' }}>
@@ -271,19 +305,6 @@ const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, l
                   <button onClick={() => onExport(sortedData)} style={{ fontSize: '0.75rem', background: '#10b981', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: '6px', cursor: 'pointer' }}>📥 CSV</button>
                 </div>
               </div>
-              {uploadError && (
-        <div className="mt-4 p-4 rounded-lg bg-red-900/40 border border-red-500/50 text-red-200 text-sm animate-pulse-slow">
-          <p className="font-bold flex items-center mb-1">
-            <span className="mr-2">⚠️</span> {uploadError.includes('SQL Permission') ? 'Supabase Configuration Required' : 'Upload Failed'}
-          </p>
-          <p>{uploadError}</p>
-          {uploadError.includes('SQL Permission') && (
-            <div className="mt-3 p-3 bg-black/40 rounded border border-red-400/30 font-mono text-xs overflow-x-auto whitespace-pre">
-              {`CREATE OR REPLACE FUNCTION execute_sql(query text)\nRETURNS json SECURITY DEFINER AS $$\nBEGIN EXECUTE query; RETURN json_build_object('status','success');\nEND; $$ LANGUAGE plpgsql;`}
-            </div>
-          )}
-        </div>
-      )}
               <div className="table-wrapper">
                 <table>
                   <thead><tr>{Object.keys(sortedData[0] || {}).map(k => <th key={k}>{k.toUpperCase()}</th>)}</tr></thead>
@@ -360,9 +381,13 @@ const AnalyticsPage = ({ title, endpoint, onExport }) => {
 
   useEffect(() => {
     setLoading(true);
-    axios.get(`http://localhost:5000/analytics/${endpoint}`)
+    api.analytics(endpoint)
       .then(res => setData(res.data))
-      .catch(err => console.error(err))
+      .catch(err => {
+        const errorInfo = handleApiError(err);
+        console.error('Analytics error:', errorInfo);
+        setError(errorInfo.error);
+      })
       .finally(() => setLoading(false));
   }, [endpoint]);
 
@@ -392,7 +417,7 @@ const AnalyticsPage = ({ title, endpoint, onExport }) => {
       <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
           <h1>{title}</h1>
-          <p>Full dataset synchronization. Showing all {sortedData.length} categories.</p>
+          <p className="header-subtitle">Full dataset synchronization. Showing all {sortedData.length} categories.</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} style={{ marginBottom: '1rem', background: '#334155', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
@@ -409,10 +434,14 @@ const AnalyticsPage = ({ title, endpoint, onExport }) => {
               <ResponsiveContainer width="100%" height={400}>
                 <BarChart data={sortedData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey={catCol} stroke="#fff" tick={{fill: '#fff'}} fontSize={10} interval={0} angle={-45} textAnchor="end" />
-                  <YAxis stroke="#fff" tick={{fill: '#fff'}} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: numCol.toUpperCase(), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
+                  <XAxis dataKey={catCol} stroke="#fff" tick={{fill: '#cbd5e1'}} fontSize={10} interval={0} angle={-45} textAnchor="end" />
+                  <YAxis stroke="#fff" tick={{fill: '#cbd5e1'}} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: numCol.toUpperCase(), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey={numCol} fill="#00d4ff" radius={[4, 4, 0, 0]} name={numCol.toUpperCase()} />
+                  <Bar dataKey={numCol} fill="#00D1FF" radius={[4, 4, 0, 0]} name={numCol.toUpperCase()}>
+                    {sortedData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS_BAR[index % COLORS_BAR.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -423,7 +452,7 @@ const AnalyticsPage = ({ title, endpoint, onExport }) => {
           <ResponsiveContainer width="100%" height={400}>
             <PieChart>
               <Pie data={sortedData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey={numCol} nameKey={catCol} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                {sortedData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                {sortedData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />)}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
@@ -478,7 +507,7 @@ function App() {
     window.queryTimeouts.push(setTimeout(() => setLoading("📊 Fetching insights..."), 1600));
 
     try {
-      const response = await axios.post('http://localhost:5000/query', { 
+      const response = await api.query({ 
         query: targetQuery, 
         filters: filters 
       });
@@ -491,9 +520,9 @@ function App() {
     } catch (err) {
       // Error: Clear timeouts and stop loading immediately
       window.queryTimeouts.forEach(t => clearTimeout(t));
-      const msg = err.response?.data?.error || err.response?.data?.message || 'Backend connection failed.';
-      setError(msg);
-      setToast(msg);
+      const errorInfo = handleApiError(err);
+      setError(errorInfo.error);
+      setToast(errorInfo.error);
       setLoading(null);
     }
   };
@@ -510,16 +539,13 @@ function App() {
     setPrevResult(result); // Save for 'Back' button
     
     try {
-      const response = await axios.post('http://localhost:5000/query', { 
-        query: query,
-        drill_down: { field, value: String(value).trim() }
-      });
+      const response = await api.drillDown({ query }, { field, value: String(value).trim() });
       setResult(response.data);
       setDrillDownPath([...drillDownPath, value]);
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.error || "Drill-down failed.";
-      setError(msg);
-      setToast(msg);
+      const errorInfo = handleApiError(err);
+      setError(errorInfo.error);
+      setToast(errorInfo.error);
     } finally {
       setLoading(null);
     }
@@ -537,13 +563,14 @@ function App() {
     if (action === 'reset') {
         setLoading("🔄 Resetting to demo dataset...");
         try {
-            await axios.post('http://localhost:5000/reset');
+            await api.reset();
             setResult(null);
             setQuery('');
             setDrillDownPath([]);
             setToast("Back to Demo: Dataset reset successfully.");
         } catch (err) {
-            setToast("Reset failed. Please try again.");
+            const errorInfo = handleApiError(err);
+            setToast(errorInfo.error);
         } finally {
             setLoading(null);
         }
@@ -557,14 +584,14 @@ function App() {
     setLoading("📤 Uploading & Detecting Schema...");
     
     try {
-      const response = await axios.post('http://localhost:5000/upload', formData);
+      const response = await api.upload(formData);
       setToast(`Success: ${response.data.message}`);
       setResult(null); // Clear previous results to reflect new schema
       setQuery('');
       setDrillDownPath([]);
     } catch (err) {
-      const msg = err.response?.data?.error || "Upload failed.";
-      setToast(`Upload failed: ${msg}`);
+      const errorInfo = handleApiError(err);
+      setToast(`Upload failed: ${errorInfo.error}`);
     } finally {
       setLoading(null);
     }
@@ -573,7 +600,7 @@ function App() {
   const handleExportCSV = async (dataToExport) => {
     if (!dataToExport || dataToExport.length === 0) return;
     try {
-      const response = await axios.post('http://localhost:5000/export', { data: dataToExport }, { responseType: 'blob' });
+      const response = await api.export(dataToExport);
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -582,8 +609,8 @@ function App() {
       link.click();
       document.body.removeChild(link);
     } catch (err) {
-      console.error("Export failed", err);
-      setToast("Failed to export CSV. Please try again.");
+      const errorInfo = handleApiError(err);
+      setToast(`Failed to export CSV: ${errorInfo.error}`);
     }
   };
 
@@ -607,9 +634,9 @@ function App() {
           />
 
         )}
-        {currentPage === 'sales' && <AnalyticsPage title="Sales Intelligence" endpoint="sales" onExport={handleExportCSV} />}
-        {currentPage === 'customer' && <AnalyticsPage title="Customer Retention" endpoint="customers" onExport={handleExportCSV} />}
-        {currentPage === 'product' && <AnalyticsPage title="Inventory & Logistics" endpoint="products" onExport={handleExportCSV} />}
+        {currentPage === 'sales' && <AnalyticsPage title="Sales Analytics" endpoint="sales" onExport={handleExportCSV} />}
+        {currentPage === 'customer' && <AnalyticsPage title="Customer Insights" endpoint="customers" onExport={handleExportCSV} />}
+        {currentPage === 'product' && <AnalyticsPage title="Product Analytics" endpoint="products" onExport={handleExportCSV} />}
       </main>
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>

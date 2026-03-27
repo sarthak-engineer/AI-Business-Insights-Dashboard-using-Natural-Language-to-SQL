@@ -25,5 +25,129 @@
     "09d02d68f71ca4421115142781bbf355": {
         "sql": "SELECT * FROM ecommerce_behavior",
         "chart": "kpi"
+    },
+    "2548db364cb93d87fdb1b055b1ffe6ae": {
+        "sql": "SELECT location, SUM(purchase_amount::NUMERIC) \nFROM ecommerce_behavior \nGROUP BY location;",
+        "chart": "bar"
+    },
+    "7f87c28ea3193e021c9c7dbc0c4aca48": {
+        "sql": "SELECT location, SUM(purchase_amount::NUMERIC) AS total_amount \nFROM ecommerce_behavior \nGROUP BY location \nORDER BY total_amount DESC \nLIMIT 1",
+        "chart": "bar"
+    },
+    "feb3d91e45b7f1c8010b7bbcd172e958": {
+        "sql": "SELECT customer_id, SUM(purchase_amount::NUMERIC) \nFROM ecommerce_behavior \nGROUP BY customer_id \nORDER BY SUM(purchase_amount::NUMERIC) DESC \nLIMIT 1",
+        "chart": "bar"
+    },
+    "d3ee95f182459c7111a27d1a8833f447": {
+        "sql": "SELECT SUM(Purchase_Amount::NUMERIC) AS total_purchase_amount, Location FROM ecommerce_behavior GROUP BY Location",
+        "chart": "bar"
+    },
+    "817da37c394306b11be584cc8ae86d51": {
+        "sql": "SELECT region, SUM(revenue::NUMERIC) FROM uploaded_dataset GROUP BY region",
+        "chart": "bar"
+    },
+    "239cf30da36c10e704e9602a8c22590a": {
+        "sql": "SELECT product, SUM(sales::NUMERIC) AS total_purchase_amount FROM uploaded_dataset GROUP BY product",
+        "chart": "bar"
+    },
+    "379f22f0734bc1b7e7790bede76511c5": {
+        "sql": "SELECT SUM(Purchase_Amount::NUMERIC) AS total_purchase_amount, Purchase_Category FROM ecommerce_behavior GROUP BY Purchase_Category",
+        "chart": "bar"
+    },
+    "b57b3065bcf9786e0ea1dad5a7ab8b2a": {
+        "sql": "SELECT SUM(sales_amount::NUMERIC) AS purchase_amount, region FROM uploaded_dataset GROUP BY region",
+        "chart": "bar"
+    },
+    "e82ee2f8e40b06671088811b4ffee184": {
+        "sql": "SELECT product_id FROM uploaded_dataset ORDER BY sales_amount DESC LIMIT 1",
+        "chart": "kpi"
+    },
+    "c8d6934f310373848ec5d58e891c262d": {
+        "sql": "SELECT product_category, SUM(sales_amount::NUMERIC) AS total_sales FROM uploaded_dataset GROUP BY product_category ORDER BY total_sales DESC LIMIT 5",
+        "chart": "bar"
+    },
+    "21ff1e1cf97e3c511efb7e2f38ef3a5b": {
+        "sql": "SELECT product_category, SUM(sales_amount::NUMERIC) AS purchase_amount FROM uploaded_dataset GROUP BY product_category",
+        "chart": "bar"
+    },
+    "b46a29ef77a7e00f9b1063ffc90cceb9": {
+        "sql": "SELECT payment_method, COUNT(*) FROM uploaded_dataset GROUP BY payment_method",
+        "chart": "bar"
+    },
+    "6efe256f5c04b45353274d6c126a70c1": {
+        "sql": "SELECT SUM(sales_amount::NUMERIC) AS purchase_amount, sales_channel AS channel FROM uploaded_dataset GROUP BY sales_channel",
+        "chart": "bar"
+    },
+    "16adbdeb63d682d4881df87033840e35": {
+        "sql": "SELECT SUM(purchase_amount::NUMERIC) FROM ecommerce_behavior",
+        "chart": "kpi"
+    },
+    "703b3e9df5dc979ba4036f015137623d": {
+        "sql": "SELECT SUM(Purchase_Amount::NUMERIC) AS total_purchase_amount, Gender FROM ecommerce_behavior GROUP BY Gender",
+        "chart": "bar"
+    },
+    "f6798a340773d45e76ee3641ca3bd117": {
+        "sql": "SELECT customer_id FROM ecommerce_behavior ORDER BY Purchase_Amount DESC LIMIT 1",
+        "chart": "kpi"
+    },
+    "ebf18d0277caad5473bf6f2b53382ca0": {
+        "sql": "SELECT SUM(Purchase_Amount::NUMERIC) FROM ecommerce_behavior GROUP BY LOWER(TRIM(COALESCE(Location, '')))",
+        "chart": "bar"
+    },
+    "18181a93b8458df68e9ba1f3cedb837c": {
+        "sql": "SELECT \n    EXTRACT(MONTH FROM TO_DATE(Time_of_Purchase::TIMESTAMP, 'YYYY-MM-DD')) AS month,\n    SUM(Purchase_Amount::NUMERIC) AS total_purchase_amount\nFROM \n    ecommerce_behavior\nWHERE \n    LOWER(TRIM(COALESCE(Location, ''))) = 'bangalore'\nGROUP BY \n    EXTRACT(MONTH FROM TO_DATE(Time_of_Purchase::TIMESTAMP, 'YYYY-MM-DD'))\nORDER BY \n    month;",
+        "chart": "line"
+    },
+    "0dabdd6da1c0f7f7c3765121a1247f4a": {
+        "sql": "SELECT \n  LOWER(TRIM(COALESCE(Gender, ''))) AS Gender,\n  SUM(Purchase_Amount::NUMERIC) AS Total_Purchase_Amount\nFROM \n  ecommerce_behavior\nGROUP BY \n  LOWER(TRIM(COALESCE(Gender, '')))",
+        "chart": "bar"
+    },
+    "973e682068d4d451daf715f069b81c2d": {
+        "sql": "SELECT SUM(Purchase_Amount::NUMERIC) FROM ecommerce_behavior WHERE LOWER(TRIM(COALESCE(Location, ''))) = 'oslo'",
+        "chart": "kpi"
+    },
+    "7fb482ad1981a6b7b377a72e222b0cdb": {
+        "sql": "SELECT purchase_category, SUM(purchase_amount::NUMERIC) \nFROM ecommerce_behavior \nGROUP BY purchase_category;",
+        "chart": "bar"
+    },
+    "d6be1f5ee86de69236d0822d3383036c": {
+        "sql": "SELECT \n    EXTRACT(MONTH FROM TO_DATE(Time_of_Purchase::TIMESTAMP, 'YYYY-MM-DD')) AS month,\n    SUM(Purchase_Amount::NUMERIC) AS total_purchase_amount\nFROM \n    ecommerce_behavior\nWHERE \n    TO_DATE(Time_of_Purchase::TIMESTAMP, 'YYYY-MM-DD') >= NOW() - INTERVAL '1 year'\nGROUP BY \n    EXTRACT(MONTH FROM TO_DATE(Time_of_Purchase::TIMESTAMP, 'YYYY-MM-DD'))\nORDER BY \n    month;",
+        "chart": "line"
+    },
+    "6d8696b8afc53556997158f54b05ccb1": {
+        "sql": "SELECT Location, SUM(Purchase_Amount::NUMERIC) AS total_purchase_amount \nFROM ecommerce_behavior \nGROUP BY Location \nORDER BY total_purchase_amount DESC \nLIMIT 5",
+        "chart": "bar"
+    },
+    "b17cc9e7a93b155c662ef819c177c74c": {
+        "sql": "SELECT region, SUM(sales_amount::NUMERIC) AS purchase_amount FROM uploaded_dataset GROUP BY region ORDER BY purchase_amount DESC LIMIT 5",
+        "chart": "bar"
+    },
+    "79a690b6d9ad8b57bb02808442420bc1": {
+        "sql": "SELECT SUM(total_amount::NUMERIC) AS purchase_amount FROM uploaded_dataset",
+        "chart": "kpi"
+    },
+    "1f3376d5ddede268d8a2b1ac2857002e": {
+        "sql": "SELECT gender, SUM(total_amount::NUMERIC) AS purchase_amount FROM uploaded_dataset GROUP BY gender",
+        "chart": "bar"
+    },
+    "e9a221d7f631d6d066db04e2bede4c40": {
+        "sql": "SELECT gender, SUM(total_amount::NUMERIC) AS purchase_amount FROM uploaded_dataset GROUP BY gender ORDER BY purchase_amount DESC LIMIT 1",
+        "chart": "bar"
+    },
+    "99828d3a77ad5014d3ba1bbdcb980904": {
+        "sql": "SELECT SUM(total_amount::NUMERIC) FROM uploaded_dataset WHERE LOWER(TRIM(COALESCE(product_category, ''))) = 'beauty'",
+        "chart": "kpi"
+    },
+    "26475c0ac0fa114eee7a4fa3c5a769c1": {
+        "sql": "SELECT age, SUM(total_amount::NUMERIC) AS purchase_amount FROM uploaded_dataset GROUP BY age ORDER BY purchase_amount DESC LIMIT 1",
+        "chart": "bar"
+    },
+    "cebfc8cedb0ff08284ae67f9c2e12627": {
+        "sql": "SELECT location, SUM(total_amount::NUMERIC) as purchase_amount FROM uploaded_dataset GROUP BY location ORDER BY purchase_amount ASC LIMIT 1",
+        "chart": "bar"
+    },
+    "67b47ffbe11501639ddb801d116eff37": {
+        "sql": "SELECT Location, MIN(Purchase_Amount::NUMERIC) FROM ecommerce_behavior GROUP BY Location ORDER BY MIN(Purchase_Amount::NUMERIC) ASC LIMIT 1",
+        "chart": "bar"
     }
 }

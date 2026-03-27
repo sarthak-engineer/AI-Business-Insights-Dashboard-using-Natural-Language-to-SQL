@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Dashboard Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #020617 0%, #0f172a 100%);
+            color: #f1f5f9;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 30px; }
+        h1 { font-size: 2rem; color: #00d4ff; margin-bottom: 10px; }
+        
+        .test-section {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .test-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        input {
+            flex: 1;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            color: #f1f5f9;
+            border-radius: 8px;
+            font-family: monospace;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #00d4ff;
+            color: #020617;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover { background: #00a8cc; }
+        button:disabled { background: #64748b; cursor: not-allowed; }
+        
+        .output {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .info { color: #00d4ff; }
+        .warning { color: #f59e0b; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+        }
+        
+        th { background: rgba(0, 212, 255, 0.1); color: #00d4ff; }
+        tr:hover { background: rgba(0, 212, 255, 0.05); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧪 Interactive Dashboard Test</h1>
+            <p>Test API endpoints and verify system functionality</p>
+        </header>
+        
+        <!-- Query Test -->
+        <div class="test-section">
+            <h2>📝 Test Natural Language Query</h2>
+            <div class="test-input">
+                <input type="text" id="queryInput" placeholder='Try: "Show top 5 customers" or "Sales by region"' value="Show top 5 customers"/>
+                <button onclick="testQuery()">Send Query</button>
+                <button onclick="testDrillDown()">Test Drill-Down</button>
+            </div>
+            <div id="queryOutput" class="output"></div>
+        </div>
+        
+        <!-- Analytics Test -->
+        <div class="test-section">
+            <h2>📊 Test Analytics Endpoints</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                <button onclick="testAnalytics('sales')">📈 Sales</button>
+                <button onclick="testAnalytics('customers')">👥 Customers</button>
+                <button onclick="testAnalytics('products')">📦 Products</button>
+            </div>
+            <div id="analyticsOutput" class="output"></div>
+        </div>
+        
+        <!-- System Status -->
+        <div class="test-section">
+            <h2>🔧 System Status</h2>
+            <button onclick="testSystemStatus()">Check Status</button>
+            <table id="statusTable" style="margin-top: 15px;">
+                <tr>
+                    <th>Component</th>
+                    <th>Status</th>
+                    <th>Details</th>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- Live Feed -->
+        <div class="test-section">
+            <h2>📡 Live API Feed</h2>
+            <button onclick="clearFeed()">Clear</button>
+            <button onclick="autoTest()">Auto Test (All Endpoints)</button>
+            <div id="liveFeed" class="output" style="min-height: 200px;">Waiting for test commands...</div>
+        </div>
+        
+        <!-- Quick Links -->
+        <div class="test-section">
+            <h2>🚀 Quick Links</h2>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                <a href="http://localhost:5177" target="_blank" style="padding: 10px 20px; background: #10b981; color: white; text-decoration: none; border-radius: 8px;">Open Dashboard</a>
+                <a href="http://localhost:5000/health" target="_blank" style="padding: 10px 20px; background: #00d4ff; color: #020617; text-decoration: none; border-radius: 8px;">Backend Health</a>
+                <a href="http://localhost:5000/analytics/sales" target="_blank" style="padding: 10px 20px; background: #7c3aed; color: white; text-decoration: none; border-radius: 8px;">Sales Data</a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:5000';
+        
+        function log(message, type = 'info') {
+            const feed = document.getElementById('liveFeed');
+            const timestamp = new Date().toLocaleTimeString();
+            feed.innerHTML += `<span class="${type}">[${timestamp}] ${message}</span>\n`;
+            feed.scrollTop = feed.scrollHeight;
+        }
+        
+        function clearFeed() {
+            document.getElementById('liveFeed').innerHTML = 'Feed cleared. Ready for new tests...';
+        }
+        
+        async function testQuery() {
+            const query = document.getElementById('queryInput').value;
+            const output = document.getElementById('queryOutput');
+            output.innerHTML = '<span class="info">Processing query...</span>';
+            
+            try {
+                log(`Query: "${query}"`, 'info');
+                const response = await fetch(`${API_URL}/query`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query, filters: {}})
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    output.innerHTML = `<span class="success">✓ Query Successful\n\n${JSON.stringify(data, null, 2)}</span>`;
+                    log(`Query result: ${data.data?.length || 0} records`, 'success');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                output.innerHTML = `<span class="error">✗ Query Failed: ${error.message}</span>`;
+                log(`Query failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testDrillDown() {
+            const output = document.getElementById('queryOutput');
+            output.innerHTML = '<span class="info">Testing drill-down...</span>';
+            
+            try {
+                const response = await fetch(`${API_URL}/query`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        query: 'Show customers',
+                        drill_down: {field: 'category', value: 'Electronics'}
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    output.innerHTML = `<span class="success">✓ Drill-Down Successful\n\n${JSON.stringify(data, null, 2)}</span>`;
+                    log('Drill-down: Success', 'success');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                output.innerHTML = `<span class="error">✗ Drill-Down Failed: ${error.message}</span>`;
+                log(`Drill-down failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testAnalytics(type) {
+            const output = document.getElementById('analyticsOutput');
+            output.innerHTML = `<span class="info">Loading ${type} analytics...</span>`;
+            
+            try {
+                log(`Fetching analytics: ${type}`, 'info');
+                const response = await fetch(`${API_URL}/analytics/${type}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const records = Array.isArray(data) ? data.length : 0;
+                    
+                    let html = `<span class="success">✓ ${type.toUpperCase()} Analytics Loaded (${records} records)\n\n`;
+                    html += `${JSON.stringify(data.slice(0, 5), null, 2)}`;
+                    if (records > 5) html += `\n... and ${records - 5} more records`;
+                    html += '</span>';
+                    
+                    output.innerHTML = html;
+                    log(`Analytics loaded: ${records} ${type} records`, 'success');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                output.innerHTML = `<span class="error">✗ Analytics Failed: ${error.message}</span>`;
+                log(`Analytics failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testSystemStatus() {
+            const table = document.getElementById('statusTable');
+            const rows = table.querySelectorAll('tr');
+            rows.forEach((r, i) => { if (i > 0) r.remove(); });
+            
+            log('Testing system status...', 'info');
+            
+            try {
+                // Test Backend
+                const backRes = await fetch(`${API_URL}/health`);
+                const backOk = backRes.ok;
+                addStatusRow(table, 'Backend API', backOk ? '✓ Online' : '✗ Offline', backOk ? 'success' : 'error', 'http://localhost:5000');
+                log(backOk ? 'Backend: Online' : 'Backend: Offline', backOk ? 'success' : 'error');
+                
+                // Test Analytics
+                const salesRes = await fetch(`${API_URL}/analytics/sales`);
+                const custRes = await fetch(`${API_URL}/analytics/customers`);
+                const prodRes = await fetch(`${API_URL}/analytics/products`);
+                const allOk = salesRes.ok && custRes.ok && prodRes.ok;
+                addStatusRow(table, 'Analytics Endpoints', allOk ? '✓ All Online' : '⚠ Partial', allOk ? 'success' : 'warning', 'sales, customers, products');
+                log(`Analytics: ${allOk ? 'All online' : 'Some issues'}`, allOk ? 'success' : 'warning');
+                
+                // Test Frontend
+                addStatusRow(table, 'Frontend Server', '✓ Running', 'success', 'http://localhost:5177');
+                log('Frontend: Running', 'success');
+                
+                log('System status check complete!', 'success');
+            } catch (error) {
+                log(`Status check error: ${error.message}`, 'error');
+                addStatusRow(table, 'Status Check', '✗ Failed', 'error', error.message);
+            }
+        }
+        
+        function addStatusRow(table, component, status, type, details) {
+            const row = table.insertRow();
+            row.innerHTML = `
+                <td>${component}</td>
+                <td><span class="${type}">${status}</span></td>
+                <td style="font-size: 0.85rem;">${details}</td>
+            `;
+        }
+        
+        async function autoTest() {
+            clearFeed();
+            log('Starting automated test...', 'info');
+            
+            // Test all endpoints
+            const endpoints = ['/health', '/analytics/sales', '/analytics/customers', '/analytics/products'];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(`${API_URL}${endpoint}`);
+                    log(`${endpoint}: ${response.ok ? '✓ Success' : '✗ Failed'}`, response.ok ? 'success' : 'error');
+                    await new Promise(r => setTimeout(r, 500));
+                } catch (error) {
+                    log(`${endpoint}: ✗ ${error.message}`, 'error');
+                }
+            }
+            
+            log('All tests complete!', 'success');
+        }
+        
+        // Run initial status check
+        window.addEventListener('load', testSystemStatus);
+    </script>
+</body>
+</html>
