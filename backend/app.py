@@ -31,9 +31,8 @@ app = Flask(__name__)
 
 # ========== SECURITY: Production CORS Configuration ==========
 # Allow specific frontend origins via environment variable or default to localhost
-frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-CORS(app, resources={r"/*": {"origins": [frontend_url, "http://localhost:5173", "http://localhost:3000"]}},
-     supports_credentials=True)
+# Force allow all origins for now to fix the connection
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Define additional security headers
 @app.after_request
