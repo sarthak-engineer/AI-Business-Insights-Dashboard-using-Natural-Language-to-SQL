@@ -5,6 +5,8 @@ echo ----------------------------------------------------
 echo 🚀 AI Business Insights Dashboard - Systems Restart
 echo ----------------------------------------------------
 
+cd /d "%~dp0\.."
+
 :: 1. Terminate any existing processes on relevant ports
 echo.
 echo 🛑 Shutting down existing services...
@@ -16,7 +18,7 @@ echo ✅ Cleanup complete.
 echo.
 echo 📦 Launching Backend API (Flask)...
 cd backend
-start /B python app.py > ..\backend.log 2>&1
+start /B python app.py > ..\logs\backend.log 2>&1
 cd ..
 echo ✅ Backend started in background on http://localhost:5000
 
@@ -24,7 +26,7 @@ echo ✅ Backend started in background on http://localhost:5000
 echo.
 echo 🎨 Launching Frontend UI (React/Vite)...
 cd frontend
-start /B npm run dev > ..\frontend.log 2>&1
+start /B npm run dev > ..\logs\frontend.log 2>&1
 cd ..
 echo ✅ Frontend started in background on http://localhost:5173
 
@@ -32,8 +34,8 @@ echo.
 echo ----------------------------------------------------
 echo ✨ System restart triggered! 
 echo.
-echo Backend logs: [backend.log]
-echo Frontend logs: [frontend.log]
+echo Backend logs: [logs\backend.log]
+echo Frontend logs: [logs\frontend.log]
 echo.
 echo 🌐 Opening dashboard at: http://localhost:5173
 timeout /t 5 /nobreak > nul

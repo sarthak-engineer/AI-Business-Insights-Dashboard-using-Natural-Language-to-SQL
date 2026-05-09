@@ -9,6 +9,7 @@ echo ----------------------------------------------------
 taskkill /IM streamlit.exe /F 2>nul
 
 echo Starting server in background...
+cd /d "%~dp0\..\streamlit_version"
 start /B streamlit run dashboard.py --server.headless true
 
 echo Waiting 5 seconds for server to initialize...
