@@ -239,8 +239,8 @@ Update the structure if your repository differs.
 ## Clone Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
-cd YOUR_REPOSITORY
+git clone https://github.com/sarthak-engineer/AI-Business-Insights-Dashboard-using-Natural-Language-to-SQL.git
+cd AI-Business-Insights-Dashboard-using-Natural-Language-to-SQL
 ```
 
 ## Backend
