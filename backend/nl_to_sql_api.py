@@ -148,7 +148,26 @@ DATE_COLUMNS = {
 
 AGGREGATE_FUNCS = ["SUM", "AVG", "MAX", "MIN", "CORR", "STDDEV", "VARIANCE"]
 
+POSTGRES_RESERVED_WORDS = {
+    "group", "order", "user", "limit", "select", "where", "from", "having",
+    "join", "table", "column", "float", "int", "integer", "date",
+    "timestamp", "case", "when", "then", "else", "end", "offset", "with"
+}
+
 def fix_sql_type_casts(sql: str) -> str:
+    if not sql:
+        return sql
+
+    # 0. Clean markdown preambles, extra text, or semicolons
+    cleaned = re.sub(r'```sql?\s*', '', sql, flags=re.IGNORECASE)
+    cleaned = re.sub(r'```', '', cleaned).strip()
+    match = re.search(r'(?i)\b(SELECT|WITH)\b', cleaned)
+    if match:
+        cleaned = cleaned[match.start():]
+    if ';' in cleaned:
+        cleaned = cleaned.split(';')[0].strip()
+    sql = cleaned.rstrip(';').strip()
+
     # Pass 1 — Add ::NUMERIC for true numeric columns inside aggregate functions
     for func in AGGREGATE_FUNCS:
         for col in NUMERIC_COLUMNS:
@@ -169,47 +188,68 @@ def fix_sql_type_casts(sql: str) -> str:
     for func in date_funcs:
         for col in DATE_COLUMNS:
             if re.search(rf'(?i){func}', sql) and re.search(rf'(?i)\b{col}\b', sql):
-                # Ensure we don't double-cast if ::TIMESTAMP or ::DATE already exists
                 if f'{col.upper()}::TIMESTAMP' not in sql.upper() and f'{col.upper()}::DATE' not in sql.upper():
                     sql = re.sub(rf'(?i)\b({col})\b(?!\s*::\s*(TIMESTAMP|DATE))', r'\1::TIMESTAMP', sql)
 
     # Pass 4 — Add ::NUMERIC for numeric comparisons in WHERE clauses (e.g., col > 100)
-    def replacer(match):
-        column = match.group(1)
-        operator = match.group(2)
-        number = match.group(3)
-        return f"{column}::NUMERIC {operator} {number}"
-    
-    pattern = r'(\b\w+\b)\s*([<>]=?)\s*(\d+(\.\d+)?)'
-    sql = re.sub(pattern, replacer, sql)
+    for col in NUMERIC_COLUMNS:
+        pattern = rf'(?i)\b({col})\b(?!\s*::)\s*([<>]=?)\s*(\d+(\.\d+)?)'
+        sql = re.sub(pattern, r'\1::NUMERIC \2 \3', sql)
 
-    # Pass 5 — Fix incorrect COUNT(condition) patterns (Common AI mistake for percentages)
-    # Correct: COUNT(CASE WHEN col = 'val' THEN 1 END)
-    # Incorrect: COUNT(col = 'val')
+    # Pass 5 — Fix incorrect COUNT(condition) patterns
     def fix_conditional_count(match):
         condition = match.group(1)
-        # Avoid double-fixing if CASE WHEN is already there
         if "CASE" in condition.upper():
             return match.group(0)
         return f"COUNT(CASE WHEN {condition} THEN 1 END)"
-    
-    # Matches COUNT( any_condition ) where any_condition contains = or > or <
     sql = re.sub(r'(?i)COUNT\(([^)]*=[^)]*|[^)]*>[^)]*|[^)]*<[^)]*)\)', fix_conditional_count, sql)
 
-    # Pass 6 — Ensure Categorical Data Normalization (LOWER(TRIM(COALESCE(col, ''))) = 'lowercase')
-    # Target: col = 'Value' -> LOWER(TRIM(COALESCE(col, ''))) = 'value'
+    # Pass 6 — Ensure Categorical Data Normalization
     def categorical_normalization_fix(match):
         column = match.group(1)
         value = match.group(2).lower()
-        # Avoid double-fixing, fixing numeric comparisons, or fixing SQL keywords
         if "LOWER(" in column.upper() or column.upper() in ["LIMIT", "ORDER", "GROUP", "OFFSET", "WHERE"]:
             return match.group(0)
         return f"LOWER(TRIM(COALESCE({column}, ''))) = '{value}'"
-
-    # Matches [column] = '[Value]'
     sql = re.sub(r'(\b[a-zA-Z_][a-zA-Z0-9_]*\b)\s*=\s*\'([^\']*)\'', categorical_normalization_fix, sql)
 
+    # Pass 7 — Fix AS inside aggregate functions: e.g. SUM(col::NUMERIC AS alias) -> SUM(col::NUMERIC) AS alias
+    def fix_agg_as(m):
+        func = m.group(1)
+        body = m.group(2)
+        alias = m.group(3)
+        return f"{func}({body}) AS {alias}"
+    sql = re.sub(r'(?i)\b(SUM|AVG|MAX|MIN|COUNT)\(([^)]+)\s+AS\s+([a-zA-Z0-9_"]+)\)', fix_agg_as, sql)
+
+    # Pass 8 — Fix double AS
+    sql = re.sub(r'(?i)\bAS\s+AS\b', 'AS', sql)
+
+    # Pass 9 — Fix single quotes on AS aliases: AS 'alias' -> AS "alias"
+    sql = re.sub(r'(?i)\bAS\s+\'([^\']+)\'', r'AS "\1"', sql)
+
+    # Pass 10 — Remove AS in GROUP BY: GROUP BY col AS alias -> GROUP BY col
+    def remove_groupby_as(m):
+        clause = m.group(0)
+        return re.sub(r'(?i)\s+AS\s+[a-zA-Z0-9_"]+', '', clause)
+    sql = re.sub(r'(?i)GROUP\s+BY\s+.*?(?=\b(ORDER|HAVING|LIMIT|OFFSET|$))', remove_groupby_as, sql)
+
+    # Pass 11 — Fix reserved words after AS without double quotes (excluding CAST(x AS type))
+    def fix_reserved_alias(m):
+        alias = m.group(1)
+        if alias.lower() in POSTGRES_RESERVED_WORDS:
+            return f'AS "{alias}"'
+        return m.group(0)
+    parts = re.split(r'(?i)(\bCAST\s*\([^)]+\))', sql)
+    new_parts = []
+    for part in parts:
+        if re.match(r'(?i)^\bCAST\s*\(', part):
+            new_parts.append(part)
+        else:
+            new_parts.append(re.sub(r'(?i)\bAS\s+([a-zA-Z_][a-zA-Z0-9_]*)\b', fix_reserved_alias, part))
+    sql = "".join(new_parts)
+
     return sql
+
 
 
 # --- Intent Detection Layer ---
