@@ -1,4 +1,13 @@
+# -*- coding: utf-8 -*-
 # backend/ml_engine.py
+import sys
+
+# Force UTF-8 output on Windows
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
+
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier

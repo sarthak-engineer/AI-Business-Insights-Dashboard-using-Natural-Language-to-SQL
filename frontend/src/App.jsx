@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
 } from 'recharts';
@@ -15,10 +15,10 @@ const COLORS_ACCENT = { positive: '#22C55E', negative: '#EF4444', warning: '#F59
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="custom-tooltip" style={{ 
-        backgroundColor: '#0f172a', 
-        padding: '12px 16px', 
-        border: '2px solid #00d4ff', 
+      <div className="custom-tooltip" style={{
+        backgroundColor: '#0f172a',
+        padding: '12px 16px',
+        border: '2px solid #00d4ff',
         borderRadius: '8px',
         boxShadow: '0 8px 32px rgba(0, 212, 255, 0.15)',
         backdropFilter: 'blur(10px)'
@@ -75,29 +75,29 @@ const Sidebar = ({ currentPage, setCurrentPage, onUpload }) => {
       <div className="section">
         <h3>🛠️ DATA ENGINE</h3>
         <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '8px' }}>Active Dataset</label>
-        
+
         <div style={{ marginBottom: '15px' }}>
-             <button 
-                onClick={() => onUpload(null, 'reset')}
-                className="reset-btn"
-                style={{ width: '100%', padding: '8px', fontSize: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', cursor: 'pointer', marginBottom: '10px' }}
-             >
-                🔄 Reset to Demo
-             </button>
+          <button
+            onClick={() => onUpload(null, 'reset')}
+            className="reset-btn"
+            style={{ width: '100%', padding: '8px', fontSize: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', cursor: 'pointer', marginBottom: '10px' }}
+          >
+            🔄 Reset to Demo
+          </button>
         </div>
 
         <div className="upload-box" style={{ border: '2px dashed #1e293b', padding: '15px', borderRadius: '10px', textAlign: 'center' }}>
-            <label htmlFor="file-upload" style={{ cursor: 'pointer', color: '#00d4ff', fontSize: '0.85rem' }}>
-                📤 Upload New CSV
-            </label>
-            <input 
-                id="file-upload"
-                type="file" 
-                accept=".csv" 
-                onChange={(e) => onUpload(e.target.files[0])} 
-                style={{ display: 'none' }}
-            />
-            <p className="caption" style={{ marginTop: '10px', fontSize: '0.7rem', color: '#64748b' }}>Custom schema awareness will be applied.</p>
+          <label htmlFor="file-upload" style={{ cursor: 'pointer', color: '#00d4ff', fontSize: '0.85rem' }}>
+            📤 Upload New CSV
+          </label>
+          <input
+            id="file-upload"
+            type="file"
+            accept=".csv"
+            onChange={(e) => onUpload(e.target.files[0])}
+            style={{ display: 'none' }}
+          />
+          <p className="caption" style={{ marginTop: '10px', fontSize: '0.7rem', color: '#64748b' }}>Custom schema awareness will be applied.</p>
         </div>
       </div>
 
@@ -193,13 +193,13 @@ const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, l
             <AreaChart data={sortedData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
               <defs>
                 <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00D1FF" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#7C3AED" stopOpacity={0.1}/>
+                  <stop offset="5%" stopColor="#00D1FF" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#7C3AED" stopOpacity={0.1} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis dataKey={xKey} stroke="#fff" tick={{fill: '#cbd5e1', fontSize: 11}} fontSize={11} angle={-45} textAnchor="end" interval={0} />
-              <YAxis stroke="#fff" tick={{fill: '#cbd5e1', fontSize: 11}} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: formatLabel(yKey), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
+              <XAxis dataKey={xKey} stroke="#fff" tick={{ fill: '#cbd5e1', fontSize: 11 }} fontSize={11} angle={-45} textAnchor="end" interval={0} />
+              <YAxis stroke="#fff" tick={{ fill: '#cbd5e1', fontSize: 11 }} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: formatLabel(yKey), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
               <Tooltip content={<CustomTooltip />} />
               <Area type="monotone" dataKey={yKey} stroke="#00D1FF" fill="url(#colorGradient)" fillOpacity={0.6} strokeWidth={3} name={formatLabel(yKey)} onClick={(e) => { const val = e.activeLabel || (e.payload && e.payload[xKey]); if (val) handleDrillDown(xKey, val); }} style={{ cursor: 'pointer', transition: 'all 0.3s ease' }} />
             </AreaChart>
@@ -218,8 +218,8 @@ const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, l
         return (
           <BarChart data={sortedData} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-            <XAxis dataKey={xKey} stroke="#fff" tick={{fill: '#cbd5e1', fontSize: 11}} fontSize={11} angle={-45} textAnchor="end" interval={0} />
-            <YAxis stroke="#fff" tick={{fill: '#cbd5e1', fontSize: 11}} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: formatLabel(yKey), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
+            <XAxis dataKey={xKey} stroke="#fff" tick={{ fill: '#cbd5e1', fontSize: 11 }} fontSize={11} angle={-45} textAnchor="end" interval={0} />
+            <YAxis stroke="#fff" tick={{ fill: '#cbd5e1', fontSize: 11 }} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: formatLabel(yKey), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
             <Tooltip content={<CustomTooltip />} />
             <Bar dataKey={yKey} fill="#00D1FF" radius={[6, 6, 0, 0]} name={formatLabel(yKey)} onClick={(e) => { const val = e[xKey] || (e.payload && e.payload[xKey]); if (val) handleDrillDown(xKey, val); }} style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}>
               {sortedData.map((entry, index) => (
@@ -267,18 +267,18 @@ const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, l
           <button type="submit" disabled={loading} className="query-btn">{loading ? '⏳...' : '🚀 RUN'}</button>
         </form>
         <div className="filters-container" style={{ marginTop: '15px', display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid #1e293b', paddingTop: '15px' }}>
-          <select value={filters.category} onChange={(e) => setFilters({...filters, category: e.target.value})} style={{ background: '#1e293b', border: '1px solid #334155', color: '#fff', padding: '5px', borderRadius: '4px', fontSize: '0.8rem' }}>
+          <select value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })} style={{ background: '#1e293b', border: '1px solid #334155', color: '#fff', padding: '5px', borderRadius: '4px', fontSize: '0.8rem' }}>
             <option value="all">Category: All</option>
             <option value="Clothing">Clothing</option>
             <option value="Electronics">Electronics</option>
             <option value="Home Decor">Home Decor</option>
           </select>
-          <select value={filters.gender} onChange={(e) => setFilters({...filters, gender: e.target.value})} style={{ background: '#1e293b', border: '1px solid #334155', color: '#fff', padding: '5px', borderRadius: '4px', fontSize: '0.8rem' }}>
+          <select value={filters.gender} onChange={(e) => setFilters({ ...filters, gender: e.target.value })} style={{ background: '#1e293b', border: '1px solid #334155', color: '#fff', padding: '5px', borderRadius: '4px', fontSize: '0.8rem' }}>
             <option value="all">Gender: All</option>
             <option value="Male">Male</option>
             <option value="Female">Female</option>
           </select>
-          <button onClick={() => setFilters({category: 'all', gender: 'all', startDate: '', endDate: ''})} style={{ fontSize: '0.8rem', color: '#00d4ff', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Reset</button>
+          <button onClick={() => setFilters({ category: 'all', gender: 'all', startDate: '', endDate: '' })} style={{ fontSize: '0.8rem', color: '#00d4ff', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Reset</button>
         </div>
       </div>
       {loading && <ThinkingState step={loading} />}
@@ -325,15 +325,15 @@ const AIQueryPage = ({ query, setQuery, handleSubmit, handleDrillDown, goBack, l
                 <h3 style={{ color: '#ec4899' }}>🔄 CHURN PREDICTION</h3>
                 {typeof result.ml_insights.churn_prediction === 'object' ? (
                   <div className="churn-details">
-                     <p style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '8px' }}>
-                        {result.ml_insights.churn_prediction.message}
-                     </p>
-                     {result.ml_insights.churn_prediction.status === 'fallback' && (
-                        <div style={{ fontSize: '0.8rem', background: 'rgba(236, 72, 153, 0.1)', padding: '8px', borderRadius: '4px', marginTop: '10px', borderLeft: '3px solid #ec4899' }}>
-                           <strong>Reason:</strong> {result.ml_insights.churn_prediction.reason} <br/>
-                           <strong>Hint:</strong> {result.ml_insights.churn_prediction.suggestion}
-                        </div>
-                     )}
+                    <p style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '8px' }}>
+                      {result.ml_insights.churn_prediction.message}
+                    </p>
+                    {result.ml_insights.churn_prediction.status === 'fallback' && (
+                      <div style={{ fontSize: '0.8rem', background: 'rgba(236, 72, 153, 0.1)', padding: '8px', borderRadius: '4px', marginTop: '10px', borderLeft: '3px solid #ec4899' }}>
+                        <strong>Reason:</strong> {result.ml_insights.churn_prediction.reason} <br />
+                        <strong>Hint:</strong> {result.ml_insights.churn_prediction.suggestion}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{result.ml_insights.churn_prediction}</p>
@@ -434,8 +434,8 @@ const AnalyticsPage = ({ title, endpoint, onExport }) => {
               <ResponsiveContainer width="100%" height={400}>
                 <BarChart data={sortedData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey={catCol} stroke="#fff" tick={{fill: '#cbd5e1'}} fontSize={10} interval={0} angle={-45} textAnchor="end" />
-                  <YAxis stroke="#fff" tick={{fill: '#cbd5e1'}} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: numCol.toUpperCase(), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
+                  <XAxis dataKey={catCol} stroke="#fff" tick={{ fill: '#cbd5e1' }} fontSize={10} interval={0} angle={-45} textAnchor="end" />
+                  <YAxis stroke="#fff" tick={{ fill: '#cbd5e1' }} fontSize={11} tickFormatter={(v) => Number(v).toLocaleString()} label={{ value: numCol.toUpperCase(), angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }} />
                   <Tooltip content={<CustomTooltip />} />
                   <Bar dataKey={numCol} fill="#00D1FF" radius={[4, 4, 0, 0]} name={numCol.toUpperCase()}>
                     {sortedData.map((entry, index) => (
@@ -490,15 +490,15 @@ function App() {
     if (e) e.preventDefault();
     const targetQuery = customQuery || query;
     if (!targetQuery) return;
-    
+
     // Clear any existing timeouts to prevent race conditions
     if (window.queryTimeouts) {
       window.queryTimeouts.forEach(t => clearTimeout(t));
     }
     window.queryTimeouts = [];
 
-    setLoading("🤖 Understanding your query..."); 
-    setResult(null); 
+    setLoading("🤖 Understanding your query...");
+    setResult(null);
     setError(null);
     setPrevResult(null);
     setDrillDownPath([]);
@@ -507,11 +507,11 @@ function App() {
     window.queryTimeouts.push(setTimeout(() => setLoading("📊 Fetching insights..."), 1600));
 
     try {
-      const response = await api.query({ 
-        query: targetQuery, 
-        filters: filters 
+      const response = await api.query({
+        query: targetQuery,
+        filters: filters
       });
-      
+
       // Success: Clear timeouts and stop loading immediately
       window.queryTimeouts.forEach(t => clearTimeout(t));
       setResult(response.data);
@@ -534,10 +534,10 @@ function App() {
       setToast("Invalid selection. Please try again.");
       return;
     }
-    
+
     setLoading(`🔍 Drilling into ${value}...`);
     setPrevResult(result); // Save for 'Back' button
-    
+
     try {
       const response = await api.drillDown({ query }, { field, value: String(value).trim() });
       setResult(response.data);
@@ -561,20 +561,20 @@ function App() {
 
   const handleFileUpload = async (file, action = 'upload') => {
     if (action === 'reset') {
-        setLoading("🔄 Resetting to demo dataset...");
-        try {
-            await api.reset();
-            setResult(null);
-            setQuery('');
-            setDrillDownPath([]);
-            setToast("Back to Demo: Dataset reset successfully.");
-        } catch (err) {
-            const errorInfo = handleApiError(err);
-            setToast(errorInfo.error);
-        } finally {
-            setLoading(null);
-        }
-        return;
+      setLoading("🔄 Resetting to demo dataset...");
+      try {
+        await api.reset();
+        setResult(null);
+        setQuery('');
+        setDrillDownPath([]);
+        setToast("Back to Demo: Dataset reset successfully.");
+      } catch (err) {
+        const errorInfo = handleApiError(err);
+        setToast(errorInfo.error);
+      } finally {
+        setLoading(null);
+      }
+      return;
     }
 
     if (!file) return;
@@ -582,7 +582,7 @@ function App() {
     const formData = new FormData();
     formData.append('file', file);
     setLoading("📤 Uploading & Detecting Schema...");
-    
+
     try {
       const response = await api.upload(formData);
       setToast(`Success: ${response.data.message}`);
@@ -619,14 +619,14 @@ function App() {
       <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} onUpload={handleFileUpload} />
       <main className="main-content">
         {currentPage === 'ai-query' && (
-          <AIQueryPage 
-            query={query} setQuery={setQuery} 
-            handleSubmit={handleQuery} 
+          <AIQueryPage
+            query={query} setQuery={setQuery}
+            handleSubmit={handleQuery}
             handleDrillDown={handleDrillDown}
             goBack={goBack}
-            loading={loading} 
-            result={result} 
-            error={error} 
+            loading={loading}
+            result={result}
+            error={error}
             drillDownPath={drillDownPath}
             filters={filters}
             setFilters={setFilters}

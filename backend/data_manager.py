@@ -1,4 +1,11 @@
+# -*- coding: utf-8 -*-
 # backend/data_manager.py
+import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # Dynamic CSV upload with LOCAL SQLite storage (bypasses Supabase DDL restrictions)
 import pandas as pd
 import sqlite3

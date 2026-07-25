@@ -1,5 +1,11 @@
+# -*- coding: utf-8 -*-
 # backend/app.py (Flask API Backend)
+import sys
 import os
+
+# Force UTF-8 stdout/stderr on Windows to handle emoji in print statements
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -21,13 +27,33 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("app.log"),
-        logging.StreamHandler()
+        logging.FileHandler("app.log", encoding='utf-8'),
+        logging.StreamHandler(stream=open(sys.stdout.fileno(), mode='w', encoding='utf-8', closefd=False))
     ]
 )
 logger = logging.getLogger(__name__)
 
+# Fix Werkzeug's request logger — it logs HTTP request lines to stderr/stdout
+# and crashes on Windows when URLs or data contain non-ASCII (e.g., city names).
+_utf8_stream = open(sys.stdout.fileno(), mode='w', encoding='utf-8', closefd=False)
+_utf8_handler = logging.StreamHandler(stream=_utf8_stream)
+_utf8_handler.setFormatter(logging.Formatter('%(message)s'))
+logging.getLogger('werkzeug').handlers = [_utf8_handler]
+logging.getLogger('werkzeug').propagate = False
+
 app = Flask(__name__)
+
+# ── Unicode-safe JSON helper (Flask 3.x removed JSON_AS_ASCII config) ──────────
+# jsonify() in Flask 3.x always escapes non-ASCII by default on Windows.
+# We use json.dumps with ensure_ascii=False + explicit UTF-8 Content-Type instead.
+from flask import Response as _FlaskResponse
+import json as _json
+
+def json_response(data, status=200):
+    """Return a Flask response with proper UTF-8 JSON (emoji-safe on Windows)."""
+    body = _json.dumps(data, ensure_ascii=False, default=str)
+    return _FlaskResponse(body, status=status, mimetype='application/json; charset=utf-8')
+
 
 # ========== SECURITY: Production CORS Configuration ==========
 # Allow specific frontend origins via environment variable or default to localhost
@@ -140,7 +166,7 @@ def sanitize_sql_string(value: str, max_length: int = 255) -> str:
 # Enhanced Smart Insights Engine v2
 def generate_insight(data_list):
     """
-    🚀 Enhanced Insight Generator: Produces meaningful, actionable insights from any dataset size.
+    [Enhanced Insight Generator]: Produces meaningful, actionable insights from any dataset size.
     Implements a hierarchical insight strategy with confidence levels and multiple analysis dimensions.
     """
     if not data_list:
@@ -372,7 +398,7 @@ def handle_query():
          # Use helpful suggestions instead of generic message
          suggestions = get_helpful_suggestions()
          suggestion_text = "\n".join(f"• {s}" for s in suggestions)
-         return jsonify({
+         return json_response({
              "status": "error",
              "message": f"That doesn't look like a valid business query. Try:\n{suggestion_text}"
          }), 400
@@ -406,12 +432,12 @@ def handle_query():
             # 1. Validation (Hard Termination)
             if not value:
                 logger.warning("TERMINATED: Empty drill-down value.")
-                return jsonify({"status": "error", "message": "Invalid drill-down input (selection is empty)."}), 400
+                return json_response({"status": "error", "message": "Invalid drill-down input (selection is empty)."}), 400
 
             # 2. Whitelist Validation for Field
             if field.lower() not in [c.lower() for c in allowed_cols]:
                 logger.warning(f"TERMINATED: Unauthorized field '{field}'")
-                return jsonify({"status": "error", "message": "Invalid column selection."}), 400
+                return json_response({"status": "error", "message": "Invalid column selection."}), 400
             
             # 3. SQL Injection Prevention - Sanitize user input  
             sanitized_value = sanitize_sql_string(value, max_length=255)
@@ -428,7 +454,7 @@ def handle_query():
                 # If validation_hint contains the error from our new validation layer
                 error_display = validation_hint if validation_hint else "Sorry, I couldn't understand the query. Please rephrase."
                 logger.warning(f"TERMINATED: Validation or Generation failed: {error_display}")
-                return jsonify({
+                return json_response({
                     "status": "error",
                     "message": error_display
                 }), 400
@@ -443,7 +469,7 @@ def handle_query():
         # 2. Execution Guard (Safety Layer)
         if not validate_sql(sql_query, allowed_columns=allowed_cols):
             logger.warning(f"TERMINATED: SQL failed safety validation: {sql_query}")
-            return jsonify({
+            return json_response({
                 "status": "error",
                 "message": "Security Alert: This query has been blocked for safety reasons."
             }), 403
@@ -474,7 +500,7 @@ def handle_query():
                     suggestion = "The filters applied are too specific. Try removing a category or location constraint."
                 
                 logger.warning(f"No results found for query: {user_query}")
-                return jsonify({
+                return json_response({
                     "original_query": user_query,
                     "data": [],
                     "message": "No results matched your criteria.",
@@ -485,7 +511,7 @@ def handle_query():
                 }), 200
         except Exception as e:
             logger.error(f"SQL Execution Error: {str(e)}")
-            return jsonify({"status": "error", "message": f"Query failed: {str(e)}", "sql": sql_query}), 500
+            return json_response({"status": "error", "message": f"Query failed: {str(e)}", "sql": sql_query}), 500
 
         
         # 3.5 Ensure numeric columns are actually numbers
@@ -518,7 +544,7 @@ def handle_query():
         # 6. ML Analytics Layer (New AI Features)
         ml_layer = get_ml_insights(df_result)
         
-        return jsonify({
+        return json_response({
 
             "original_query": user_query,
             "enhanced_query": enhanced_query if not drill_down else "N/A (Drill-down)",
@@ -531,22 +557,22 @@ def handle_query():
         })
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return json_response({"error": str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    return jsonify({"status": "Backend is running"}), 200
+    return json_response({"status": "Backend is running"}), 200
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Handles CSV upload: parse, detect schema, store in local SQLite."""
     if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
+        return json_response({"error": "No file part"}), 400
     file = request.files['file']
     if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+        return json_response({"error": "No selected file"}), 400
     if not file.filename.lower().endswith('.csv'):
-        return jsonify({"error": "Only CSV files are supported"}), 400
+        return json_response({"error": "Only CSV files are supported"}), 400
     
     logger.info(f"Upload request received: {file.filename}")
     
@@ -555,7 +581,7 @@ def upload_file():
     
     if success:
         logger.info(f"Upload SUCCESS: {file.filename} - {message}")
-        return jsonify({
+        return json_response({
             "message": f"✅ {file.filename}: {message}",
             "columns": [col["clean"] for col in schema["columns"]],
             "schema_summary": {
@@ -566,7 +592,7 @@ def upload_file():
         }), 200
     else:
         logger.error(f"Upload FAILED: {file.filename} - {message}")
-        return jsonify({"error": message}), 400
+        return json_response({"error": message}), 400
 
 @app.route('/reset', methods=['POST'])
 def reset_dataset():
@@ -574,16 +600,16 @@ def reset_dataset():
     success = clear_uploaded_dataset()
     if success:
         logger.info("Dataset reset to demo successfully")
-        return jsonify({"message": "Successfully reset to demo dataset"}), 200
+        return json_response({"message": "Successfully reset to demo dataset"}), 200
     else:
-        return jsonify({"error": "Failed to clear uploaded dataset"}), 500
+        return json_response({"error": "Failed to clear uploaded dataset"}), 500
 
 @app.route('/export', methods=['POST'])
 def export_csv():
     try:
         data = request.json.get('data', [])
         if not data:
-            return jsonify({"error": "No data to export"}), 400
+            return json_response({"error": "No data to export"}), 400
             
         df = pd.DataFrame(data)
         
@@ -599,7 +625,7 @@ def export_csv():
             headers={"Content-disposition": "attachment; filename=dashboard_report.csv"}
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return json_response({"error": str(e)}), 500
 
 # ========== SMART COLUMN DETECTION FOR DYNAMIC SCHEMA ==========
 
@@ -704,11 +730,11 @@ def get_sales_analytics():
             if active_schema:
                 active_table = "uploaded_dataset"
                 use_local_db = True
-                logger.info(f"📊 Sales Analytics: Using UPLOADED DATASET")
+                logger.info(f"[Sales Analytics] Using UPLOADED DATASET")
             else:
-                logger.warning("📊 Sales Analytics: Uploaded dataset detected but schema load failed. Using demo.")
+                logger.warning("[Sales Analytics] Uploaded dataset detected but schema load failed. Using demo.")
         else:
-            logger.info(f"📊 Sales Analytics: Using DEMO DATASET")
+            logger.info(f"[Sales Analytics] Using DEMO DATASET")
         
         # 2. Detect Columns
         col_config = get_analytics_columns(active_schema)
@@ -717,7 +743,7 @@ def get_sales_analytics():
         
         if not measure_col or not grouping_col:
             logger.warning(f"Sales Analytics: Could not detect required columns. measure={measure_col}, grouping={grouping_col}")
-            return jsonify([])
+            return json_response([])
         
         logger.info(f"Sales Analytics: measure_col={measure_col}, grouping_col={grouping_col}")
         
@@ -739,21 +765,21 @@ def get_sales_analytics():
             cat_sales.columns = ["Category", "Revenue"]
             df = cat_sales.sort_values(by="Revenue", ascending=False)
         
-        print(f"📊 Sales Data Rows: {len(df)}")
+        print(f"[Sales] Rows: {len(df)}")
         if df.empty:
-            return jsonify([])
+            return json_response([])
         
         # Return results (handle both demo and uploaded formats)
         if not use_local_db:
-            return jsonify(df.to_dict(orient="records"))
+            return json_response(df.to_dict(orient="records"))
         else:
             # For uploaded DBs, just return the dataframe as-is since it's already formatted
-            return jsonify(df.to_dict(orient="records"))
+            return json_response(df.to_dict(orient="records"))
             
     except Exception as e:
         logger.error(f"Error in sales analytics: {str(e)}")
         print(f"Error in sales analytics: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return json_response({"error": str(e)}), 500
 
 
 @app.route('/analytics/customers', methods=['GET'])
@@ -773,11 +799,11 @@ def get_customer_analytics():
             if active_schema:
                 active_table = "uploaded_dataset"
                 use_local_db = True
-                logger.info(f"👤 Customer Analytics: Using UPLOADED DATASET")
+                logger.info(f"[Customer Analytics] Using UPLOADED DATASET")
             else:
-                logger.warning("👤 Customer Analytics: Uploaded dataset detected but schema load failed. Using demo.")
+                logger.warning("[Customer Analytics] Uploaded dataset detected but schema load failed. Using demo.")
         else:
-            logger.info(f"👤 Customer Analytics: Using DEMO DATASET")
+            logger.info(f"[Customer Analytics] Using DEMO DATASET")
         
         # 2. Detect Columns (use all available grouping columns)
         col_config = get_analytics_columns(active_schema)
@@ -785,7 +811,7 @@ def get_customer_analytics():
         
         if not grouping_cols:
             logger.warning(f"Customer Analytics: Could not detect grouping columns")
-            return jsonify([])
+            return json_response([])
         
         # For customer analytics, prefer "location" if available, otherwise use first grouping column
         location_col = None
@@ -813,15 +839,15 @@ def get_customer_analytics():
             location_data.columns = ["Location", "Count"]
             df = location_data
         
-        print(f"👤 Customer Data Rows: {len(df)}")
+        print(f"[Customer] Rows: {len(df)}")
         if df.empty:
-            return jsonify([])
+            return json_response([])
         
-        return jsonify(df.to_dict(orient="records"))
+        return json_response(df.to_dict(orient="records"))
     except Exception as e:
         logger.error(f"Error in customer analytics: {str(e)}")
         print(f"Error in customer analytics: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return json_response({"error": str(e)}), 500
 
 
 @app.route('/analytics/products', methods=['GET'])
@@ -841,11 +867,11 @@ def get_product_analytics():
             if active_schema:
                 active_table = "uploaded_dataset"
                 use_local_db = True
-                logger.info(f"📦 Product Analytics: Using UPLOADED DATASET")
+                logger.info(f"[Product Analytics] Using UPLOADED DATASET")
             else:
-                logger.warning("📦 Product Analytics: Uploaded dataset detected but schema load failed. Using demo.")
+                logger.warning("[Product Analytics] Uploaded dataset detected but schema load failed. Using demo.")
         else:
-            logger.info(f"📦 Product Analytics: Using DEMO DATASET")
+            logger.info(f"[Product Analytics] Using DEMO DATASET")
         
         # 2. Detect Columns
         col_config = get_analytics_columns(active_schema)
@@ -854,7 +880,7 @@ def get_product_analytics():
         
         if not measure_col or not grouping_cols:
             logger.warning(f"Product Analytics: Could not detect required columns. measure={measure_col}, grouping={grouping_cols}")
-            return jsonify([])
+            return json_response([])
         
         # For product analytics, prefer "category" or "product" if available
         product_col = None
@@ -882,27 +908,33 @@ def get_product_analytics():
             top_categories.columns = ["Category", "Total Revenue"]
             df = top_categories
         
-        print(f"📦 Product Data Rows: {len(df)}")
+        print(f"[Product] Rows: {len(df)}")
         if df.empty:
-            return jsonify([])
+            return json_response([])
         
-        return jsonify(df.to_dict(orient="records"))
+        return json_response(df.to_dict(orient="records"))
     except Exception as e:
         logger.error(f"Error in product analytics: {str(e)}")
         print(f"Error in product analytics: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return json_response({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    # ========== PRODUCTION SERVER CONFIGURATION ==========
-    # Render provides 'PORT' environment variable; fallback to 5000 for local dev
     port = int(os.getenv('PORT', 5000))
+    is_render = os.getenv('RENDER', '').lower() == 'true'
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    
-    logger.info(f"Starting Flask server on 0.0.0.0:{port} (DEBUG={debug_mode})")
-    
-    app.run(
-        host='0.0.0.0', 
-        port=port,
-        debug=debug_mode,
-        use_reloader=False
-    )
+
+    logger.info(f"Starting server on port {port}")
+
+    if is_render or debug_mode:
+        # On Render (production) or when debugging, use built-in Flask server
+        app.run(host='0.0.0.0', port=port, debug=debug_mode, use_reloader=False)
+    else:
+        # Locally on Windows: use Waitress to avoid Werkzeug charmap encoding crashes
+        try:
+            from waitress import serve
+            logger.info(f"Using Waitress WSGI server on 0.0.0.0:{port}")
+            print(f"Server running at http://localhost:{port}")
+            serve(app, host='0.0.0.0', port=port, threads=4)
+        except ImportError:
+            logger.warning("Waitress not installed, falling back to Werkzeug dev server")
+            app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)

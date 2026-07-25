@@ -1,5 +1,14 @@
+# -*- coding: utf-8 -*-
 # backend/nl_to_sql_api.py (Clean version for Flask API)
+import sys
 import os
+
+# Force UTF-8 output on Windows
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from dotenv import load_dotenv
 from groq import Groq
 import time
@@ -274,7 +283,7 @@ def get_fallback_sql(user_query, table_name="ecommerce_behavior"):
     """
     q = user_query.lower()
     logger.info(f"Fallback logic triggered for query: {user_query}")
-    print(f"🔄 Applying fallback logic for: '{user_query}'")
+    print(f" Applying fallback logic for: '{user_query}'")
     
     # Intent Mapping
     is_top = any(word in q for word in ["highest", "top", "best", "rank"])
@@ -610,7 +619,7 @@ Your goal is to convert the user's natural language question into a valid, optim
         else:
             raise Exception("AI returned empty content")
     except Exception as e:
-        print(f"⚠️ AI Generation Error: {str(e)}")
+        print(f" AI Generation Error: {str(e)}")
         # Step 2: Fallback Layer
         sql_fallback = get_fallback_sql(nl_query, table_name)
         # Attempt minimal chart detection for fallback
