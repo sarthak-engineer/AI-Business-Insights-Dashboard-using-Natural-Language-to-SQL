@@ -1,4 +1,4 @@
-# 🚀 AI-Powered Business Insights Dashboard using Natural Language to SQL
+# 🚀 AI-Powered-Natural-Language-to-SQL-Business-Insights-Dashboard
 
 > Transform natural language into SQL queries and interactive business
 > insights using Generative AI, Machine Learning, and Business
@@ -28,7 +28,7 @@ https://ai-business-insights-dashboard-using.onrender.com
 
 # 📖 Overview
 
-AI-Powered Business Insights Dashboard using Natural Language to SQL is a full-stack AI-driven Business Intelligence platform that enables users to analyze structured data using natural language instead of writing SQL queries. The platform is designed to simplify data exploration for business users, analysts, and non-technical stakeholders by combining Generative AI, Machine Learning, and interactive data visualization into a single application.
+AI-Powered-Natural-Language-to-SQL-Business-Insights-Dashboard is a full-stack AI-driven Business Intelligence platform that enables users to analyze structured data using natural language instead of writing SQL queries. The platform is designed to simplify data exploration for business users, analysts, and non-technical stakeholders by combining Generative AI, Machine Learning, and interactive data visualization into a single application.
 
 The system leverages Groq Llama 3.3 to translate natural language questions into SQL queries, validates the generated SQL for security, and executes it against PostgreSQL (Supabase) or SQLite databases. Query results are processed using Pandas and presented through an intuitive React-based dashboard featuring interactive charts, KPI cards, searchable tables, and AI-generated business insights.
 
@@ -241,8 +241,8 @@ AI-Business-Insights-Dashboard-using-Natural-Language-to-SQL/
 # 🚀 Installation
 
 ``` bash
-git clone https://github.com/sarthak-engineer/AI-Business-Insights-Dashboard-using-Natural-Language-to-SQL.git
-cd AI-Business-Insights-Dashboard-using-Natural-Language-to-SQL
+git clone https://github.com/sarthak-engineer/AI-Powered-Natural-Language-to-SQL-Business-Insights-Dashboard.git
+cd AI-Powered-Natural-Language-to-SQL-Business-Insights-Dashboard
 ```
 
 Backend:
