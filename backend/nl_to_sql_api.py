@@ -125,7 +125,7 @@ def save_file_cache(cache_data):
         pass
 
 MODEL_MAPPING = {
-    "groq-1": "llama-3.3-70b-versatile"
+    "groq-1": "openai/gpt-oss-20b"
 }
 
 NUMERIC_COLUMNS = {
@@ -327,7 +327,7 @@ def get_fallback_sql(user_query, table_name="ecommerce_behavior"):
     
     # Intent Mapping
     is_top = any(word in q for word in ["highest", "top", "best", "rank"])
-    is_revenue = any(word in q for word in ["sales", "revenue", "earnings", "income", "total amount"])
+    is_revenue = any(word in q for word in ["sales", "revenue", "earnings", "income", "total amount", "purchase_amount"])
     is_count = any(word in q for word in ["count", "number", "how many", "users", "orders"])
     is_avg = any(word in q for word in ["average", "avg", "mean", "per user"])
 
@@ -626,7 +626,7 @@ Your goal is to convert the user's natural language question into a valid, optim
                 return cached_val["sql"], enhanced_query, cached_val["chart"]
             return cached_val, enhanced_query, "bar" # Backward compatibility for old cache
 
-        actual_model = MODEL_MAPPING.get("groq-1", "llama-3.3-70b-versatile")
+        actual_model = MODEL_MAPPING.get("groq-1", "openai/gpt-oss-20b")
         response = client.chat.completions.create(
             model=actual_model,
             messages=[

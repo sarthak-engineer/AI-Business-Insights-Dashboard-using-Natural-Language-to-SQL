@@ -378,6 +378,7 @@ const AnalyticsPage = ({ title, endpoint, onExport }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sortOrder, setSortOrder] = useState('none');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -405,6 +406,7 @@ const AnalyticsPage = ({ title, endpoint, onExport }) => {
   const sortedData = getSortedData(data);
 
   if (loading) return <ThinkingState step="⚡ SYNCING DATA..." />;
+  if (error) return <div className="error-message">Error: {error}</div>;
   if (sortedData.length === 0) return <div className="loading">No data found for {title}.</div>;
 
   const keys = Object.keys(sortedData[0]);
